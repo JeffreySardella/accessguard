@@ -10,3 +10,18 @@ test('flags an image with no alt text', async () => {
   const rules = result.violations.map(v => v.ruleId);
   expect(rules).toContain('image-alt');
 }, 30000);
+
+import { app } from '../src/server.js';
+import http from 'node:http';
+
+test('POST /scan returns 400 when url missing', async () => {
+  const server = http.createServer(app).listen(0);
+  const port = server.address().port;
+  const res = await fetch(`http://127.0.0.1:${port}/scan`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  server.close();
+  expect(res.status).toBe(400);
+});
