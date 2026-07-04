@@ -28,8 +28,18 @@ export function isBlockedIp(ip) {
   return false;
 }
 
-// Throws if the URL must not be scanned. Allows only http/https, and rejects
-// hosts that resolve to any blocked address.
+// True when the operator has explicitly opted into scanning private/internal
+// hosts. OFF by default (production-safe). Turn on only inside a trusted
+// network where the scan targets are your own internal sites — e.g. a Drupal
+// site on a private Docker/LAN address.
+function allowPrivateTargets() {
+  return /^(1|true|yes)$/i.test(process.env.SCANNER_ALLOW_PRIVATE || '');
+}
+
+// Throws if the URL must not be scanned. Always requires http/https. By default
+// also rejects hosts that resolve to a private/loopback/link-local address
+// (SSRF protection); that IP-range check is bypassed only when
+// SCANNER_ALLOW_PRIVATE is explicitly set.
 // KNOWN LIMITATION: does not pin the resolved IP into Puppeteer, so a DNS
 // rebinding attack between this check and page load is not fully closed. A
 // follow-up should pass the validated IP to runScan via --host-resolver-rules.
@@ -42,6 +52,9 @@ export async function assertUrlAllowed(rawUrl) {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('invalid_url_scheme');
+  }
+  if (allowPrivateTargets()) {
+    return;
   }
   const addrs = await lookup(parsed.hostname, { all: true });
   if (addrs.length === 0 || addrs.some((a) => isBlockedIp(a.address))) {

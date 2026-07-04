@@ -1,0 +1,24 @@
+# AccessGuard scanner microservice as a ddev-managed service.
+# Reachable from the web container at http://accessguard-scanner:3000
+# (matches accessguard.settings:scanner_endpoint).
+services:
+  accessguard-scanner:
+    container_name: ddev-${DDEV_SITENAME}-accessguard-scanner
+    hostname: accessguard-scanner
+    build:
+      context: ../scanner
+      dockerfile: Dockerfile
+    restart: "no"
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      # Dev/demo: this scanner scans the local Drupal site, which lives on a
+      # private Docker IP. Opt into private targets on trusted networks only.
+      # Leave this OFF in production so the SSRF guard blocks internal hosts.
+      - SCANNER_ALLOW_PRIVATE=1
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    networks:
+      - default
