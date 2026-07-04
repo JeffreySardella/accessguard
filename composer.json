@@ -20,7 +20,8 @@
         "drupal/core-project-message": "^11.4",
         "drupal/core-recipe-unpack": "^11.4",
         "drupal/core-recommended": "^11.4",
-        "drush/drush": "^13.7"
+        "drush/drush": "^13.7",
+        "symfony/http-client": "^8.1"
     },
     "conflict": {
         "drupal/drupal": "*"
@@ -100,5 +101,8 @@
                 "      composer remove drupal/core-project-message"
             ]
         }
+    },
+    "require-dev": {
+        "drupal/core-dev": "^11.4"
     }
 }

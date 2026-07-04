@@ -1,0 +1,4 @@
+services:
+  accessguard.scan_runner:
+    class: Drupal\accessguard\Service\ScanRunner
+    arguments: ['@http_client', '@config.factory']
