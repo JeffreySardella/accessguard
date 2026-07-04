@@ -1,7 +1,7 @@
 import { isBlockedIp, assertUrlAllowed } from '../src/urlGuard.js';
 
 test('blocks loopback, private, link-local, metadata addresses', () => {
-  for (const ip of ['127.0.0.1', '10.0.0.5', '172.16.0.1', '192.168.1.1', '169.254.169.254', '0.0.0.0', '::1']) {
+  for (const ip of ['127.0.0.1', '10.0.0.5', '172.16.0.1', '192.168.1.1', '169.254.169.254', '0.0.0.0', '::1', '198.18.0.1', '240.0.0.1']) {
     expect(isBlockedIp(ip)).toBe(true);
   }
 });

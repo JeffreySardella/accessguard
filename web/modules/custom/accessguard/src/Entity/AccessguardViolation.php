@@ -15,6 +15,9 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   id: 'accessguard_violation',
   label: new TranslatableMarkup('AccessGuard Violation'),
   base_table: 'accessguard_violation',
+  handlers: [
+    'views_data' => 'Drupal\views\EntityViewsData',
+  ],
   entity_keys: [
     'id' => 'id',
     'uuid' => 'uuid',

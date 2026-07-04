@@ -11,7 +11,7 @@ export function isBlockedIp(ip) {
   if (ip.includes('.')) {
     const p = ip.split('.').map(Number);
     if (p.length !== 4 || p.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
-    const [a, b] = p;
+    const [a, b, c] = p;
     if (a === 0) return true;                          // 0.0.0.0/8
     if (a === 127) return true;                         // loopback
     if (a === 10) return true;                          // private
@@ -19,12 +19,16 @@ export function isBlockedIp(ip) {
     if (a === 192 && b === 168) return true;            // private
     if (a === 169 && b === 254) return true;            // link-local
     if (a === 100 && b >= 64 && b <= 127) return true;  // CGNAT
+    if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmarking
+    if (a === 192 && b === 0 && c === 0) return true;      // 192.0.0.0/24 IETF protocol
+    if (a >= 240) return true;                             // 240.0.0.0/4 reserved
     return false;
   }
 
   const low = ip.toLowerCase();
   if (low === '::1' || low === '::') return true;        // loopback / unspecified
   if (low.startsWith('fe80') || low.startsWith('fc') || low.startsWith('fd')) return true; // link-local / ULA
+  if (low.startsWith('ff')) return true;                   // ff00::/8 multicast
   return false;
 }
 

@@ -11,6 +11,8 @@ test('flags an image with no alt text', async () => {
   const result = await runScan(fixture);
   const rules = result.violations.map(v => v.ruleId);
   expect(rules).toContain('image-alt');
+  const imgAlt = result.violations.find((v) => v.ruleId === 'image-alt');
+  expect(imgAlt.wcagCriterion).toMatch(/^wcag\d{3,}$/);
 }, 30000);
 
 test('POST /scan returns 400 when url missing', async () => {

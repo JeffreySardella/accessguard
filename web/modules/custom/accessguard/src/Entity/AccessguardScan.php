@@ -15,6 +15,9 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   id: 'accessguard_scan',
   label: new TranslatableMarkup('AccessGuard Scan'),
   base_table: 'accessguard_scan',
+  handlers: [
+    'views_data' => 'Drupal\views\EntityViewsData',
+  ],
   entity_keys: [
     'id' => 'id',
     'uuid' => 'uuid',

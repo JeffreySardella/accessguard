@@ -8,10 +8,13 @@ class ScanRecorder {
   public function __construct(protected EntityTypeManagerInterface $entityTypeManager) {}
 
   public function record(string $entityType, int $entityId, ?int $authorUid, string $triggeredBy, array $scanResult) {
+    $validImpacts = ['critical', 'serious', 'moderate', 'minor'];
     $violations = $scanResult['violations'] ?? [];
     $counts = ['critical' => 0, 'serious' => 0, 'moderate' => 0, 'minor' => 0];
-    foreach ($violations as $v) {
-      $impact = $v['impact'] ?? 'minor';
+    $normalizedImpacts = [];
+    foreach ($violations as $key => $v) {
+      $impact = in_array($v['impact'] ?? NULL, $validImpacts, TRUE) ? $v['impact'] : 'unknown';
+      $normalizedImpacts[$key] = $impact;
       if (isset($counts[$impact])) {
         $counts[$impact]++;
       }
@@ -33,11 +36,11 @@ class ScanRecorder {
     $scan->save();
 
     $vStorage = $this->entityTypeManager->getStorage('accessguard_violation');
-    foreach ($violations as $v) {
+    foreach ($violations as $key => $v) {
       $vStorage->create([
         'scan_id' => $scan->id(),
         'rule_id' => $v['ruleId'] ?? '',
-        'impact' => $v['impact'] ?? '',
+        'impact' => $normalizedImpacts[$key],
         'wcag_criterion' => $v['wcagCriterion'] ?? '',
         'selector' => $v['selector'] ?? '',
         'html_snippet' => $v['html'] ?? '',

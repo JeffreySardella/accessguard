@@ -24,7 +24,9 @@ export async function runScan(url) {
 
     const violations = [];
     for (const v of raw) {
-      const wcag = (v.tags.find(t => /^wcag\d/.test(t)) || null);
+      const wcag = v.tags.find((t) => /^wcag\d{3,}$/.test(t))
+        || v.tags.find((t) => /^wcag/.test(t))
+        || null;
       for (const node of v.nodes) {
         violations.push({
           ruleId: v.id,
