@@ -1,0 +1,5 @@
+name: AccessGuard
+type: module
+description: 'Section 508 / WCAG compliance governance built on axe-core.'
+package: Accessibility
+core_version_requirement: ^11

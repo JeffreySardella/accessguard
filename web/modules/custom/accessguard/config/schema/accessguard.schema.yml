@@ -1,0 +1,7 @@
+accessguard.settings:
+  type: config_object
+  label: 'AccessGuard settings'
+  mapping:
+    scanner_endpoint:
+      type: string
+      label: 'Scanner service endpoint'
