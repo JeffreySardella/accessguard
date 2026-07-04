@@ -1,0 +1,20 @@
+# PHP / Composer
+/vendor/
+composer.phar
+
+# Node scanner
+node_modules/
+npm-debug.log*
+
+# Drupal / env
+.ddev/
+settings.local.php
+*.sql
+*.sql.gz
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
