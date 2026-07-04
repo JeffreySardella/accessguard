@@ -1,0 +1,5 @@
+accessguard.dashboard:
+  title: 'AccessGuard compliance'
+  description: 'Accessibility scan results and compliance status.'
+  route_name: accessguard.dashboard
+  parent: system.admin_reports

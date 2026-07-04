@@ -1,0 +1,7 @@
+accessguard.dashboard:
+  path: '/admin/reports/accessguard'
+  defaults:
+    _controller: 'Drupal\accessguard\Controller\DashboardController::overview'
+    _title: 'AccessGuard compliance'
+  requirements:
+    _permission: 'view accessguard reports'

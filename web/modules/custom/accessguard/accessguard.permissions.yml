@@ -1,0 +1,8 @@
+'view accessguard reports':
+  title: 'View AccessGuard reports'
+'administer accessguard':
+  title: 'Administer AccessGuard'
+  restrict access: true
+'bypass accessguard gating':
+  title: 'Bypass AccessGuard publish gating'
+  restrict access: true
