@@ -23,6 +23,7 @@ One-line pitch: "axe-core tells you what is broken. AccessGuard makes an organiz
 - Attribute violations to the content author responsible.
 - Produce a site-wide compliance dashboard and an exportable audit report.
 - Ship with fixtures and automated tests so a reviewer can clone and run it.
+- Provide a measurable, honest comparison against existing free tools (Lighthouse, pa11y) using the fixtures as ground truth, to demonstrate the value AccessGuard adds.
 
 **Non-goals**
 - Rebuilding or improving axe-core's detection rules.
@@ -139,6 +140,29 @@ Because axe-core's rule set is fixed and documented, each fixture has an expecte
 
 Installed via a drush command or default-content export so a reviewer can reproduce results in one step.
 
+## 9a. Benchmark and comparison
+
+The fixtures pack (section 9) is a set of pages with a *known* set of planted violations. That makes it a ground truth we can measure any tool against. AccessGuard ships a small benchmark harness that runs the same fixture pages through multiple free tools and produces a comparison the README can cite.
+
+**Honest framing.** Lighthouse uses axe-core (a curated subset of its rules) for its accessibility audit. We do not claim a better detection *engine*. Two truthful comparisons matter:
+
+1. **Detection coverage.** Because Lighthouse runs a subset of axe rules and AccessGuard runs the full WCAG 2.2 AA ruleset, AccessGuard flags planted violations Lighthouse's audit skips. The harness reports, per fixture: violations planted, caught by Lighthouse, caught by pa11y, caught by AccessGuard. Numbers come from the run, not from assumption.
+
+2. **Capability.** This is the real differentiator. Existing tools audit one page, one time.
+
+| Capability | Lighthouse | pa11y | AccessGuard |
+|---|---|---|---|
+| Single-page detection | yes | yes | yes |
+| Full WCAG 2.2 AA ruleset | subset | partial | yes |
+| Automated site-wide scan | no | no | yes |
+| Results stored / tracked over time | no | no | yes |
+| Regression diff (new / fixed / persisting) | no | no | yes |
+| Publish-gating / enforcement | no | no | yes |
+| Author attribution | no | no | yes |
+| Exportable audit report | no | no | yes |
+
+**Harness.** A script (Node, reusing the scanner's Chromium) runs Lighthouse CLI and pa11y against each fixture URL, collects violation counts, and writes a Markdown table plus a JSON record. Optional; not on the critical path for the module working, so it lands in phase 5 alongside the README.
+
 ## 10. Tech stack, environment, cost
 
 - **Drupal 10 or 11** (match the version already installed in the developer's `drupal-practice` composer project).
@@ -153,7 +177,7 @@ Installed via a drush command or default-content export so a reviewer can reprod
 2. **Dashboards and per-node history** — site overview and per-node detail views.
 3. **Publish-gating and permissions** — moderation validator, threshold config, bypass permission.
 4. **Cron site-wide scanning, regression diff, author accountability, audit export.**
-5. **Fixtures pack, test suite, and README** with screenshots and a demo GIF.
+5. **Fixtures pack, test suite, benchmark harness, and README** with screenshots, a demo GIF, and the tool-comparison table.
 
 ## 12. Success criteria
 
@@ -166,6 +190,7 @@ Installed via a drush command or default-content export so a reviewer can reprod
 **Portfolio**
 - Clean public GitHub repo with a README that explains the problem, the architecture, and the "why axe-core plus governance" decision.
 - A short demo GIF showing a bad page being caught and blocked.
+- A benchmark table comparing AccessGuard to Lighthouse and pa11y on the fixtures, with real numbers and an honest capability matrix.
 - One or two interview-ready sentences the developer can say truthfully about the work.
 
 ## 13. Risks and open questions
