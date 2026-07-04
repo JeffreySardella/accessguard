@@ -11,3 +11,12 @@ accessguard.settings:
     gate_threshold:
       type: string
       label: 'Gating severity threshold'
+    rescan_enabled:
+      type: boolean
+      label: 'Enable cron re-scanning'
+    rescan_interval:
+      type: integer
+      label: 'Re-scan interval (seconds)'
+    rescan_batch:
+      type: integer
+      label: 'Max nodes enqueued per cron run'

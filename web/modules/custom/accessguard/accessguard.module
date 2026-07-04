@@ -13,3 +13,51 @@ function accessguard_entity_type_alter(array &$entity_types) {
     $entity_types['node']->addConstraint('AccessguardGate', []);
   }
 }
+
+/**
+ * Implements hook_cron().
+ *
+ * Enqueues published nodes that are unscanned or whose latest scan is stale.
+ */
+function accessguard_cron() {
+  $config = \Drupal::config('accessguard.settings');
+  if (!$config->get('rescan_enabled')) {
+    return;
+  }
+  $interval = (int) ($config->get('rescan_interval') ?: 86400);
+  $batch = (int) ($config->get('rescan_batch') ?: 25);
+  $cutoff = \Drupal::time()->getRequestTime() - $interval;
+
+  $entity_type_manager = \Drupal::entityTypeManager();
+
+  // Published node ids.
+  $nids = $entity_type_manager->getStorage('node')->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('status', 1)
+    ->execute();
+  if (!$nids) {
+    return;
+  }
+
+  // Latest scan timestamp per target node.
+  $latest = [];
+  foreach ($entity_type_manager->getStorage('accessguard_scan')->loadMultiple() as $scan) {
+    $nid = $scan->get('target_entity_id')->value;
+    $created = (int) $scan->get('created')->value;
+    if (!isset($latest[$nid]) || $created > $latest[$nid]) {
+      $latest[$nid] = $created;
+    }
+  }
+
+  $queue = \Drupal::queue('accessguard_scan_queue');
+  $enqueued = 0;
+  foreach ($nids as $nid) {
+    $last = $latest[$nid] ?? 0;
+    if ($last < $cutoff) {
+      $queue->createItem(['nid' => (int) $nid]);
+      if (++$enqueued >= $batch) {
+        break;
+      }
+    }
+  }
+}
