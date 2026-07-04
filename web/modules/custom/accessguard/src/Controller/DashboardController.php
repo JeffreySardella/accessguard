@@ -5,7 +5,9 @@ namespace Drupal\accessguard\Controller;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Renders the AccessGuard compliance overview.
@@ -90,7 +92,72 @@ class DashboardController extends ControllerBase {
     ];
     $build['#cache'] = ['max-age' => 0];
 
+    $build['export'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Export audit CSV'),
+      '#url' => Url::fromRoute('accessguard.audit_export'),
+      '#attributes' => ['class' => ['button']],
+    ];
+
     return $build;
+  }
+
+  /**
+   * Streams a CSV of current violations (latest scan per node).
+   */
+  public function exportCsv() {
+    $scanStorage = $this->entityTypeManagerService->getStorage('accessguard_scan');
+    $violationStorage = $this->entityTypeManagerService->getStorage('accessguard_violation');
+    $nodeStorage = $this->entityTypeManagerService->getStorage('node');
+
+    // Latest scan per node.
+    $latest = [];
+    foreach ($scanStorage->loadMultiple() as $scan) {
+      $nid = $scan->get('target_entity_id')->value;
+      $created = (int) $scan->get('created')->value;
+      if (!isset($latest[$nid]) || $created > (int) $latest[$nid]->get('created')->value) {
+        $latest[$nid] = $scan;
+      }
+    }
+
+    $rows = [];
+    $rows[] = ['Page', 'Node ID', 'URL', 'Scan date', 'Rule', 'Impact', 'WCAG', 'Selector'];
+    foreach ($latest as $nid => $scan) {
+      $node = $nodeStorage->load($nid);
+      $title = $node ? $node->label() : ('Node ' . $nid);
+      $date = $this->dateFormatter->format((int) $scan->get('created')->value, 'short');
+      $url = $scan->get('url')->value;
+      $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
+      if (!$violations) {
+        $rows[] = [$title, $nid, $url, $date, '(no violations)', '', '', ''];
+        continue;
+      }
+      foreach ($violations as $v) {
+        $rows[] = [
+          $title,
+          $nid,
+          $url,
+          $date,
+          $v->get('rule_id')->value,
+          $v->get('impact')->value,
+          $v->get('wcag_criterion')->value,
+          $v->get('selector')->value,
+        ];
+      }
+    }
+
+    $handle = fopen('php://temp', 'r+');
+    foreach ($rows as $row) {
+      fputcsv($handle, $row);
+    }
+    rewind($handle);
+    $csv = stream_get_contents($handle);
+    fclose($handle);
+
+    $response = new Response($csv);
+    $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
+    $response->headers->set('Content-Disposition', 'attachment; filename="accessguard-audit.csv"');
+    return $response;
   }
 
 }

@@ -5,3 +5,11 @@ accessguard.dashboard:
     _title: 'AccessGuard compliance'
   requirements:
     _permission: 'view accessguard reports'
+
+accessguard.audit_export:
+  path: '/admin/reports/accessguard/export'
+  defaults:
+    _controller: 'Drupal\accessguard\Controller\DashboardController::exportCsv'
+    _title: 'Export AccessGuard audit'
+  requirements:
+    _permission: 'view accessguard reports'
