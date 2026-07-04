@@ -3,29 +3,22 @@
 namespace Drupal\accessguard\Service;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
+use GuzzleHttp\ClientInterface;
 
 /**
- * Calls the AccessGuard Node scanner over HTTP and returns the decoded scan.
+ * Calls the Node scanner microservice and returns its decoded response.
  */
 class ScanRunner {
 
   public function __construct(
-    protected HttpClientInterface $httpClient,
+    protected ClientInterface $httpClient,
     protected ConfigFactoryInterface $configFactory,
   ) {}
 
   /**
-   * Scans a URL for accessibility violations via the Node scanner service.
+   * Scans a URL. Returns the decoded { url, violations[] } array.
    *
-   * @param string $url
-   *   The URL to scan.
-   *
-   * @return array
-   *   The decoded { url, violations[] } array from the scanner.
-   *
-   * @throws \RuntimeException
-   *   If the request to the scanner fails.
+   * @throws \RuntimeException on transport or decode failure.
    */
   public function scan(string $url): array {
     $endpoint = rtrim($this->configFactory->get('accessguard.settings')->get('scanner_endpoint'), '/');
@@ -34,7 +27,8 @@ class ScanRunner {
         'json' => ['url' => $url],
         'timeout' => 60,
       ]);
-      return $response->toArray();
+      $data = json_decode((string) $response->getBody(), TRUE, 512, JSON_THROW_ON_ERROR);
+      return is_array($data) ? $data : [];
     }
     catch (\Throwable $e) {
       throw new \RuntimeException('AccessGuard scan failed: ' . $e->getMessage(), 0, $e);

@@ -20,8 +20,7 @@
         "drupal/core-project-message": "^11.4",
         "drupal/core-recipe-unpack": "^11.4",
         "drupal/core-recommended": "^11.4",
-        "drush/drush": "^13.7",
-        "symfony/http-client": "^8.1"
+        "drush/drush": "^13.7"
     },
     "conflict": {
         "drupal/drupal": "*"

@@ -4,9 +4,10 @@ namespace Drupal\Tests\accessguard\Unit;
 
 use Drupal\accessguard\Service\ScanRunner;
 use Drupal\Tests\UnitTestCase;
+use GuzzleHttp\Client;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
-use Symfony\Component\HttpClient\MockHttpClient;
-use Symfony\Component\HttpClient\Response\MockResponse;
 
 class ScanRunnerTest extends UnitTestCase {
 
@@ -15,7 +16,8 @@ class ScanRunnerTest extends UnitTestCase {
       ['ruleId' => 'image-alt', 'impact' => 'critical', 'wcagCriterion' => 'wcag2a',
        'selector' => 'img', 'html' => '<img>', 'helpUrl' => 'http://help'],
     ]]);
-    $client = new MockHttpClient(new MockResponse($payload, ['http_code' => 200]));
+    $mock = new MockHandler([new Response(200, [], $payload)]);
+    $client = new Client(['handler' => HandlerStack::create($mock)]);
     $config = $this->getConfigFactoryStub([
       'accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000'],
     ]);
