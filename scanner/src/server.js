@@ -1,5 +1,6 @@
 import express from 'express';
 import { runScan } from './scan.js';
+import { assertUrlAllowed } from './urlGuard.js';
 
 export const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -12,10 +13,16 @@ app.post('/scan', async (req, res) => {
     return res.status(400).json({ error: 'Missing required "url" string.' });
   }
   try {
+    await assertUrlAllowed(url);
+  } catch {
+    return res.status(400).json({ error: 'url_not_allowed' });
+  }
+  try {
     const result = await runScan(url);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    console.error('[accessguard-scanner] scan failed:', err);
+    res.status(500).json({ error: 'scan_failed' });
   }
 });
 
