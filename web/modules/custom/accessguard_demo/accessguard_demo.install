@@ -1,0 +1,102 @@
+<?php
+
+/**
+ * @file
+ * Install hooks for AccessGuard Demo Fixtures.
+ *
+ * Creates a content type with a rendering body field and a set of pages each
+ * seeded with a known, textbook accessibility violation, so AccessGuard has
+ * real content to scan. Field storage/instance/displays are created
+ * explicitly (this site ships without a body field storage).
+ */
+
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\node\Entity\Node;
+use Drupal\node\Entity\NodeType;
+
+/**
+ * The demo content type machine name.
+ */
+const ACCESSGUARD_DEMO_TYPE = 'accessguard_page';
+
+/**
+ * Implements hook_install().
+ */
+function accessguard_demo_install() {
+  // 1. Content type.
+  if (!NodeType::load(ACCESSGUARD_DEMO_TYPE)) {
+    NodeType::create([
+      'type' => ACCESSGUARD_DEMO_TYPE,
+      'name' => 'AccessGuard demo page',
+      'display_submitted' => FALSE,
+    ])->save();
+  }
+
+  // 2. Body field storage (shared 'body' storage) if missing.
+  if (!FieldStorageConfig::loadByName('node', 'body')) {
+    FieldStorageConfig::create([
+      'field_name' => 'body',
+      'entity_type' => 'node',
+      'type' => 'text_with_summary',
+      'cardinality' => 1,
+    ])->save();
+  }
+
+  // 3. Body field instance on the demo bundle.
+  if (!FieldConfig::loadByName('node', ACCESSGUARD_DEMO_TYPE, 'body')) {
+    FieldConfig::create([
+      'field_name' => 'body',
+      'entity_type' => 'node',
+      'bundle' => ACCESSGUARD_DEMO_TYPE,
+      'label' => 'Body',
+    ])->save();
+  }
+
+  // 4. Make the body render on the node page and be editable.
+  $display_repo = \Drupal::service('entity_display.repository');
+  $display_repo->getViewDisplay('node', ACCESSGUARD_DEMO_TYPE, 'default')
+    ->setComponent('body', ['type' => 'text_default', 'label' => 'hidden'])
+    ->save();
+  $display_repo->getFormDisplay('node', ACCESSGUARD_DEMO_TYPE, 'default')
+    ->setComponent('body', ['type' => 'text_textarea_with_summary'])
+    ->save();
+
+  // 5. Seed nodes. Each: [title, body HTML, the axe rule it should trigger].
+  $fixtures = [
+    ['Missing image alt text', '<h1>Missing image alt</h1><p>The image below has no alt attribute.</p><img src="/core/misc/druplicon.png">', 'image-alt'],
+    ['Button with no text', '<h1>Nameless button</h1><p>The button below has no accessible name.</p><button type="button"></button>', 'button-name'],
+    ['Empty link', '<h1>Empty link</h1><p>The following link has no text.</p><a href="/somewhere"></a>', 'link-name'],
+    ['Low contrast text', '<h1>Low contrast</h1><p style="color:#bcbcbc;background:#cccccc">This grey-on-grey text fails contrast.</p>', 'color-contrast'],
+    ['Iframe with no title', '<h1>Untitled frame</h1><p>The embedded frame below has no title.</p><iframe src="/" width="300" height="150"></iframe>', 'frame-title'],
+    ['Form input without label', '<h1>Unlabeled form field</h1><form><input type="text" name="q"></form>', 'label'],
+  ];
+
+  foreach ($fixtures as [$title, $body, $rule]) {
+    Node::create([
+      'type' => ACCESSGUARD_DEMO_TYPE,
+      'title' => 'AG fixture: ' . $title,
+      'status' => 1,
+      'body' => [
+        'value' => $body . '<!-- expected axe rule: ' . $rule . ' -->',
+        'format' => 'full_html',
+      ],
+    ])->save();
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ *
+ * Removes the demo nodes (leaves the content type in place).
+ */
+function accessguard_demo_uninstall() {
+  $storage = \Drupal::entityTypeManager()->getStorage('node');
+  $ids = $storage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('type', ACCESSGUARD_DEMO_TYPE)
+    ->execute();
+  if ($ids) {
+    $storage->delete($storage->loadMultiple($ids));
+  }
+}

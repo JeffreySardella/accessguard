@@ -1,0 +1,8 @@
+name: AccessGuard Demo Fixtures
+type: module
+description: 'Installs a content type and deliberately inaccessible demo pages for exercising AccessGuard.'
+package: Accessibility
+core_version_requirement: ^11
+dependencies:
+  - drupal:node
+  - accessguard:accessguard
