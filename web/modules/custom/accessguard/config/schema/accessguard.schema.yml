@@ -5,3 +5,9 @@ accessguard.settings:
     scanner_endpoint:
       type: string
       label: 'Scanner service endpoint'
+    gate_enabled:
+      type: boolean
+      label: 'Enable publish gating'
+    gate_threshold:
+      type: string
+      label: 'Gating severity threshold'

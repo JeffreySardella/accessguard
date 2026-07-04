@@ -1,1 +1,3 @@
 scanner_endpoint: 'http://accessguard-scanner:3000'
+gate_enabled: true
+gate_threshold: 'critical'
