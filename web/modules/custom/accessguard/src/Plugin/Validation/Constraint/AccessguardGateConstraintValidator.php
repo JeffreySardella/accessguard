@@ -6,6 +6,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\accessguard\Service\WaiverMatcher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
@@ -19,6 +20,7 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
     protected EntityTypeManagerInterface $entityTypeManager,
     protected ConfigFactoryInterface $configFactory,
     protected AccountProxyInterface $currentUser,
+    protected WaiverMatcher $waiverMatcher,
   ) {}
 
   /**
@@ -29,6 +31,7 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       $container->get('entity_type.manager'),
       $container->get('config.factory'),
       $container->get('current_user'),
+      $container->get('accessguard.waiver_matcher'),
     );
   }
 
@@ -73,12 +76,24 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       // Never scanned: nothing to gate on.
       return;
     }
+    $scanId = reset($ids);
 
-    $scan = $scanStorage->load(reset($ids));
+    $waived = $this->waiverMatcher->waivedFingerprints((int) $entity->id());
+    $violationStorage = $this->entityTypeManager->getStorage('accessguard_violation');
+    $violations = $violationStorage->loadByProperties(['scan_id' => $scanId]);
+
     $blocking = 0;
-    foreach ($rank as $sev => $r) {
-      if ($r >= $threshold) {
-        $blocking += (int) $scan->get('count_' . $sev)->value;
+    foreach ($violations as $v) {
+      $impact = $v->get('impact')->value;
+      if (($rank[$impact] ?? 0) < $threshold) {
+        continue;
+      }
+      $fp = WaiverMatcher::fingerprint(
+        $v->get('rule_id')->value,
+        (string) $v->get('selector')->value
+      );
+      if (!isset($waived[$fp])) {
+        $blocking++;
       }
     }
 

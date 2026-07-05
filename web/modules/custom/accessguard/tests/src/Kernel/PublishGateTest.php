@@ -29,6 +29,7 @@ class PublishGateTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
     $this->installEntitySchema('accessguard_violation');
+    $this->installEntitySchema('accessguard_waiver');
     $this->installEntitySchema('node');
     $this->installEntitySchema('user');
     $this->installSchema('node', ['node_access']);
@@ -46,12 +47,21 @@ class PublishGateTest extends KernelTestBase {
    * Creates a completed scan for a node with the given critical count.
    */
   private function makeScan(int $nid, int $critical): void {
-    \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
       'target_entity_type' => 'node',
       'target_entity_id' => $nid,
       'status' => 'complete',
       'count_critical' => $critical,
-    ])->save();
+    ]);
+    $scan->save();
+    for ($i = 0; $i < $critical; $i++) {
+      \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+        'scan_id' => $scan->id(),
+        'rule_id' => 'image-alt',
+        'impact' => 'critical',
+        'selector' => 'img',
+      ])->save();
+    }
   }
 
   /**
@@ -125,6 +135,25 @@ class PublishGateTest extends KernelTestBase {
     $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 0]);
     $node->save();
     $this->makeScan((int) $node->id(), 1);
+    $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  /**
+   * Tests that a waived violation no longer blocks publishing.
+   */
+  public function testWaivedViolationDoesNotBlockPublish(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'bad but waived', 'status' => 0]);
+    $node->save();
+    $this->makeScan((int) $node->id(), 1);
+    // Waive the image-alt/img violation for this node.
+    \Drupal::entityTypeManager()->getStorage('accessguard_waiver')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'rule_id' => 'image-alt',
+      'selector' => 'img',
+      'status' => 'false_positive',
+    ])->save();
     $node->setPublished();
     $this->assertSame(0, $this->countGateViolations($node));
   }

@@ -6,3 +6,6 @@
 'bypass accessguard gating':
   title: 'Bypass AccessGuard publish gating'
   restrict access: true
+'triage accessguard violations':
+  title: 'Triage (waive) AccessGuard violations'
+  restrict access: true

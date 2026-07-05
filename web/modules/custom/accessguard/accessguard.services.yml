@@ -11,3 +11,6 @@ services:
   accessguard.scan_repository:
     class: Drupal\accessguard\Repository\ScanRepository
     arguments: ['@database']
+  accessguard.waiver_matcher:
+    class: Drupal\accessguard\Service\WaiverMatcher
+    arguments: ['@entity_type.manager']
