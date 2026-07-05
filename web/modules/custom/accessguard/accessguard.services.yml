@@ -5,3 +5,6 @@ services:
   accessguard.scan_recorder:
     class: Drupal\accessguard\Service\ScanRecorder
     arguments: ['@entity_type.manager']
+  accessguard.regression:
+    class: Drupal\accessguard\Service\RegressionService
+    arguments: ['@entity_type.manager']

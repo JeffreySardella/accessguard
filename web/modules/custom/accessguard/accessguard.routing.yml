@@ -13,3 +13,16 @@ accessguard.audit_export:
     _title: 'Export AccessGuard audit'
   requirements:
     _permission: 'view accessguard reports'
+
+accessguard.node_detail:
+  path: '/admin/reports/accessguard/node/{node}'
+  defaults:
+    _controller: 'Drupal\accessguard\Controller\DashboardController::detail'
+    _title: 'AccessGuard: page detail'
+  requirements:
+    _permission: 'view accessguard reports'
+    node: \d+
+  options:
+    parameters:
+      node:
+        type: 'entity:node'

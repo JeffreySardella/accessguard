@@ -5,7 +5,9 @@ namespace Drupal\accessguard\Controller;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Link;
 use Drupal\Core\Url;
+use Drupal\node\NodeInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -51,7 +53,7 @@ class DashboardController extends ControllerBase {
       }
       $node = $nodeStorage->load($nid);
       $rows[] = [
-        $node ? $node->toLink() : $this->t('Node @id', ['@id' => $nid]),
+        $node ? Link::fromTextAndUrl($node->label(), Url::fromRoute('accessguard.node_detail', ['node' => $nid])) : $this->t('Node @id', ['@id' => $nid]),
         $this->dateFormatter->format((int) $scan->get('created')->value, 'short'),
         (int) $scan->get('count_critical')->value,
         (int) $scan->get('count_serious')->value,
@@ -158,6 +160,70 @@ class DashboardController extends ControllerBase {
     $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
     $response->headers->set('Content-Disposition', 'attachment; filename="accessguard-audit.csv"');
     return $response;
+  }
+
+  /**
+   * Per-node detail: scan history, regression diff, author attribution.
+   */
+  public function detail(NodeInterface $node) {
+    $nid = (int) $node->id();
+    $scanStorage = $this->entityTypeManagerService->getStorage('accessguard_scan');
+    $userStorage = $this->entityTypeManagerService->getStorage('user');
+
+    $ids = $scanStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('target_entity_type', 'node')
+      ->condition('target_entity_id', $nid)
+      ->sort('created', 'DESC')
+      ->execute();
+
+    $author = $this->t('Unknown');
+    $historyRows = [];
+    $first = TRUE;
+    foreach ($scanStorage->loadMultiple($ids) as $scan) {
+      if ($first) {
+        $uid = $scan->get('content_author')->target_id;
+        if ($uid && ($u = $userStorage->load($uid))) {
+          $author = $u->getDisplayName();
+        }
+        $first = FALSE;
+      }
+      $historyRows[] = [
+        $this->dateFormatter->format((int) $scan->get('created')->value, 'short'),
+        (int) $scan->get('count_critical')->value,
+        (int) $scan->get('count_serious')->value,
+        (int) $scan->get('count_moderate')->value,
+        (int) $scan->get('count_minor')->value,
+      ];
+    }
+
+    $diff = \Drupal::service('accessguard.regression')->diff($nid);
+
+    $build = [];
+    $build['title'] = [
+      '#markup' => '<h2>' . $this->t('@title', ['@title' => $node->label()]) . '</h2>',
+    ];
+    $build['attribution'] = [
+      '#markup' => '<p>' . $this->t('Content author: <strong>@a</strong>', ['@a' => $author]) . '</p>',
+    ];
+    $build['regression'] = [
+      '#theme' => 'item_list',
+      '#title' => $this->t('Change since previous scan'),
+      '#items' => [
+        $this->t('New: @v', ['@v' => $diff['new'] ? implode(', ', $diff['new']) : $this->t('none')]),
+        $this->t('Fixed: @v', ['@v' => $diff['fixed'] ? implode(', ', $diff['fixed']) : $this->t('none')]),
+        $this->t('Still present: @v', ['@v' => $diff['persisting'] ? implode(', ', $diff['persisting']) : $this->t('none')]),
+      ],
+    ];
+    $build['history'] = [
+      '#type' => 'table',
+      '#caption' => $this->t('Scan history'),
+      '#header' => [$this->t('Date'), $this->t('Critical'), $this->t('Serious'), $this->t('Moderate'), $this->t('Minor')],
+      '#rows' => $historyRows,
+      '#empty' => $this->t('No scans yet.'),
+    ];
+    $build['#cache'] = ['max-age' => 0];
+    return $build;
   }
 
   /**
