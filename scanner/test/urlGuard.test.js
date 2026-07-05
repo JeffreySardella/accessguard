@@ -1,4 +1,14 @@
-import { isBlockedIp, assertUrlAllowed } from '../src/urlGuard.js';
+import { isBlockedIp, assertUrlAllowed, resolveAndAssert } from '../src/urlGuard.js';
+
+test('resolveAndAssert returns hostname and ip for an allowed host', async () => {
+  const r = await resolveAndAssert('http://8.8.8.8/');
+  expect(r.hostname).toBe('8.8.8.8');
+  expect(r.ip).toBe('8.8.8.8');
+});
+
+test('resolveAndAssert throws for a blocked host', async () => {
+  await expect(resolveAndAssert('http://127.0.0.1/')).rejects.toThrow('blocked_host');
+});
 
 test('blocks loopback, private, link-local, metadata addresses', () => {
   for (const ip of ['127.0.0.1', '10.0.0.5', '172.16.0.1', '192.168.1.1', '169.254.169.254', '0.0.0.0', '::1', '198.18.0.1', '240.0.0.1']) {

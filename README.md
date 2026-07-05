@@ -57,7 +57,7 @@ See `benchmark/RESULTS.md` for an empirical detection comparison on the demo fix
 
 ## Security
 
-The scanner loads arbitrary URLs in a real browser, a classic SSRF risk. By default it **only** allows `http`/`https` and **blocks** private, loopback, link-local, CGNAT, and reserved IP ranges. Scanning internal/private hosts (like your own Drupal site on a private network) requires explicitly opting in via `SCANNER_ALLOW_PRIVATE=1` — secure by default, explicit override for trusted networks. (Known limitation: the resolved IP isn't pinned into Puppeteer, so DNS-rebinding is not fully closed; documented in `scanner/src/urlGuard.js`.)
+The scanner loads arbitrary URLs in a real browser, a classic SSRF risk. By default it **only** allows `http`/`https` and **blocks** private, loopback, link-local, CGNAT, and reserved IP ranges. Scanning internal/private hosts (like your own Drupal site on a private network) requires explicitly opting in via `SCANNER_ALLOW_PRIVATE=1` — secure by default, explicit override for trusted networks. The guard runs on **every** request the page makes (the navigation, any redirects, and subresources) via request interception, and the validated IP is **pinned into Chromium** (`--host-resolver-rules`) so a DNS-rebinding attack can't swap the target between validation and connection.
 
 ## Quick start
 
@@ -102,7 +102,7 @@ You should see all six demo pages, each with the accessibility violation it was 
 ## Roadmap
 
 - PDF audit export and richer per-rule / per-author analytics.
-- DNS-rebinding hardening (pin the resolved IP into Puppeteer).
+- Concurrency-limited browser pooling in the scanner (reuse instances under load).
 
 ## Tech stack
 

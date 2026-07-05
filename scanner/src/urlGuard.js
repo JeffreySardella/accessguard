@@ -41,18 +41,17 @@ function allowPrivateTargets() {
   return /^(1|true|yes)$/i.test(process.env.SCANNER_ALLOW_PRIVATE || '');
 }
 
-// Throws if the URL must not be scanned. Always requires http/https. By default
-// also rejects hosts that resolve to a private/loopback/link-local address
-// (SSRF protection); that IP-range check is bypassed only when
-// SCANNER_ALLOW_PRIVATE is explicitly set.
+// Validates a URL against the SSRF policy AND returns the resolved address, so
+// the caller can pin that exact IP into the browser. Always requires
+// http/https. Rejects hosts that resolve to a private/loopback/link-local
+// address unless SCANNER_ALLOW_PRIVATE is set. Returns { hostname, ip }.
 //
-// scan.js additionally runs this guard on every request the page makes (the
-// navigation, redirects it follows, and subresources) via request
-// interception, so redirect-to-internal and subresource-to-internal vectors
-// are covered. KNOWN LIMITATION: the resolved IP is not pinned into Puppeteer,
-// so a DNS-rebinding race between this check and the actual connection remains
-// theoretically open; closing it fully would require --host-resolver-rules.
-export async function assertUrlAllowed(rawUrl) {
+// Pinning the returned ip (scan.js does this via --host-resolver-rules) closes
+// the DNS-rebinding race: the browser connects to the same address we checked,
+// not one re-resolved a moment later. scan.js also re-runs assertUrlAllowed on
+// every request (navigation, redirects, subresources) via request
+// interception, covering redirect- and subresource-to-internal vectors.
+export async function resolveAndAssert(rawUrl) {
   let parsed;
   try {
     parsed = new URL(rawUrl);
@@ -62,11 +61,16 @@ export async function assertUrlAllowed(rawUrl) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('invalid_url_scheme');
   }
-  if (allowPrivateTargets()) {
-    return;
-  }
   const addrs = await lookup(parsed.hostname, { all: true });
-  if (addrs.length === 0 || addrs.some((a) => isBlockedIp(a.address))) {
-    throw new Error('blocked_host');
+  if (!allowPrivateTargets()) {
+    if (addrs.length === 0 || addrs.some((a) => isBlockedIp(a.address))) {
+      throw new Error('blocked_host');
+    }
   }
+  return { hostname: parsed.hostname, ip: addrs[0]?.address ?? null };
+}
+
+// Throws if the URL must not be scanned (see resolveAndAssert).
+export async function assertUrlAllowed(rawUrl) {
+  await resolveAndAssert(rawUrl);
 }
