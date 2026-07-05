@@ -1,6 +1,0 @@
-services:
-  accessguard.commands:
-    class: Drupal\accessguard\Commands\AccessguardCommands
-    arguments: ['@entity_type.manager', '@queue', '@accessguard.scan_runner', '@accessguard.scan_recorder']
-    tags:
-      - { name: drush.command }

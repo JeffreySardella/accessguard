@@ -7,17 +7,17 @@ use Drupal\accessguard\Service\ScanRunner;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\Queue\Attribute\QueueWorker;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Core\Queue\SuspendQueueException;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
-/**
- * @QueueWorker(
- *   id = "accessguard_scan_queue",
- *   title = @Translation("AccessGuard scan queue"),
- *   cron = {"time" = 60}
- * )
- */
+#[QueueWorker(
+  id: 'accessguard_scan_queue',
+  title: new TranslatableMarkup('AccessGuard scan queue'),
+  cron: ['time' => 60],
+)]
 class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
   public function __construct(
     array $configuration, $plugin_id, $plugin_definition,

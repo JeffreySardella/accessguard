@@ -1,30 +1,42 @@
 <?php
 
-namespace Drupal\accessguard\Commands;
+namespace Drupal\accessguard\Drush\Commands;
 
 use Drupal\accessguard\Service\ScanRecorder;
 use Drupal\accessguard\Service\ScanRunner;
+use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Queue\QueueFactory;
+use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
-class AccessguardCommands extends DrushCommands {
+final class AccessguardCommands extends DrushCommands implements ContainerInjectionInterface {
+
   public function __construct(
-    protected EntityTypeManagerInterface $entityTypeManager,
-    protected QueueFactory $queueFactory,
-    protected ScanRunner $scanRunner,
-    protected ScanRecorder $scanRecorder,
+    private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly QueueFactory $queueFactory,
+    private readonly ScanRunner $scanRunner,
+    private readonly ScanRecorder $scanRecorder,
   ) {
     parent::__construct();
   }
 
+  public static function create(ContainerInterface $container): self {
+    return new self(
+      $container->get('entity_type.manager'),
+      $container->get('queue'),
+      $container->get('accessguard.scan_runner'),
+      $container->get('accessguard.scan_recorder'),
+    );
+  }
+
   /**
    * Scan a node for accessibility violations.
-   *
-   * @command accessguard:scan
-   * @param int $nid The node ID to scan.
-   * @option now Run immediately instead of queueing.
    */
+  #[CLI\Command(name: 'accessguard:scan')]
+  #[CLI\Argument(name: 'nid', description: 'The node ID to scan.')]
+  #[CLI\Option(name: 'now', description: 'Run immediately instead of queueing.')]
   public function scan(int $nid, array $options = ['now' => FALSE]): void {
     if (empty($options['now'])) {
       $this->queueFactory->get('accessguard_scan_queue')->createItem(['nid' => $nid]);
@@ -42,4 +54,5 @@ class AccessguardCommands extends DrushCommands {
       $scan->get('count_critical')->value . " critical, " .
       $scan->get('count_serious')->value . " serious.");
   }
+
 }

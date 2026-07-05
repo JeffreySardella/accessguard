@@ -100,7 +100,6 @@ You should see all six demo pages, each with the accessibility violation it was 
 
 ## Roadmap
 
-- Attribute-based Drush command (currently the legacy discovery pattern, which works).
 - Configurable settings form UI (thresholds, intervals) instead of drush config.
 - PDF audit export and richer per-rule / per-author analytics.
 - DNS-rebinding hardening (pin the resolved IP into Puppeteer).
