@@ -6,6 +6,8 @@ Government and enterprise websites are legally required to meet WCAG 2.2 / Secti
 
 > **axe-core tells you what's broken. AccessGuard makes an organization stay accountable for fixing it.**
 
+![AccessGuard compliance dashboard](docs/images/dashboard.png)
+
 ---
 
 ## Why this exists
