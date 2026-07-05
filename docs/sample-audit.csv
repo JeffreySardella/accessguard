@@ -1,0 +1,10 @@
+Page,"Node ID",URL,"Scan date",Rule,Impact,WCAG,Selector
+"AG fixture: Missing image alt text",8,http://accessguard.ddev.site/node/8,"5 Jul 2026 - 06:20",image-alt,critical,wcag111,img
+"AG fixture: Button with no text",9,http://accessguard.ddev.site/node/9,"4 Jul 2026 - 18:47",button-name,critical,wcag2a,"button[type=""button""]"
+"AG fixture: Empty link",10,http://accessguard.ddev.site/node/10,"4 Jul 2026 - 18:47",link-name,serious,wcag2a,"a[href$=""somewhere""]"
+"AG fixture: Low contrast text",11,http://accessguard.ddev.site/node/11,"4 Jul 2026 - 18:47",color-contrast,serious,wcag2aa,p
+"AG fixture: Iframe with no title",12,http://accessguard.ddev.site/node/12,"4 Jul 2026 - 18:47",frame-title,serious,wcag2a,iframe
+"AG fixture: Form input without label",13,http://accessguard.ddev.site/node/13,"4 Jul 2026 - 18:47",label,critical,wcag2a,input
+"Gate demo — try to publish me",14,http://accessguard.ddev.site/node/14,"5 Jul 2026 - 06:42",image-alt,critical,wcag111,img
+"Regression demo (tracked across two scans)",15,,"5 Jul 2026 - 09:08",color-contrast,serious,wcag2a,
+"Regression demo (tracked across two scans)",15,,"5 Jul 2026 - 09:08",label,serious,wcag2a,

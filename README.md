@@ -101,6 +101,22 @@ You should see all six demo pages, each with the accessibility violation it was 
 - **`accessguard_demo` module** — a content type plus six pages, each seeded with one reliable WCAG violation, for exercising the pipeline.
 - **`benchmark/`** — a harness comparing AccessGuard's axe (WCAG 2.2 AA) against pa11y (and optionally Lighthouse) on the fixtures.
 
+## Screenshots
+
+**Publish-gating** — a content editor is blocked from publishing a page that failed its scan (superusers with the bypass permission can override):
+
+![Publish gate blocking a non-compliant page](docs/images/gate-blocked.png)
+
+**Per-page detail** — scan history, the regression diff (new / fixed / still-present), and author attribution:
+
+![Per-page detail with regression tracking](docs/images/detail.png)
+
+**Settings** — configure the scanner, gate threshold, and cron re-scanning:
+
+![Settings form](docs/images/settings.png)
+
+A sample exported audit report is at [`docs/sample-audit.csv`](docs/sample-audit.csv).
+
 ## Roadmap
 
 - PDF audit export and richer per-rule / per-author analytics.
