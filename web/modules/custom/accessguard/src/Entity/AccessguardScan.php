@@ -18,6 +18,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   handlers: [
     'views_data' => 'Drupal\views\EntityViewsData',
   ],
+  admin_permission: 'view accessguard reports',
   entity_keys: [
     'id' => 'id',
     'uuid' => 'uuid',

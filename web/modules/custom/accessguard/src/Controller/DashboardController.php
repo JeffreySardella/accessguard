@@ -4,6 +4,7 @@ namespace Drupal\accessguard\Controller;
 
 use Drupal\accessguard\Csv\CsvSafe;
 use Drupal\accessguard\Repository\ScanRepository;
+use Drupal\Component\Utility\Html;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -199,7 +200,7 @@ class DashboardController extends ControllerBase {
 
     $build = [];
     $build['title'] = [
-      '#markup' => '<h2>' . $this->t('@title', ['@title' => $node->label()]) . '</h2>',
+      '#markup' => '<h2>' . Html::escape($node->label()) . '</h2>',
     ];
     $build['attribution'] = [
       '#markup' => '<p>' . $this->t('Content author: <strong>@a</strong>', ['@a' => $author]) . '</p>',

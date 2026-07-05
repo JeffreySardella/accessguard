@@ -2,10 +2,14 @@
 
 namespace Drupal\accessguard\Service;
 
+use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
 class ScanRecorder {
-  public function __construct(protected EntityTypeManagerInterface $entityTypeManager) {}
+  public function __construct(
+    protected EntityTypeManagerInterface $entityTypeManager,
+    protected Connection $database,
+  ) {}
 
   public function record(string $entityType, int $entityId, ?int $authorUid, string $triggeredBy, array $scanResult) {
     $validImpacts = ['critical', 'serious', 'moderate', 'minor'];
@@ -20,32 +24,39 @@ class ScanRecorder {
       }
     }
 
-    $scanStorage = $this->entityTypeManager->getStorage('accessguard_scan');
-    $scan = $scanStorage->create([
-      'target_entity_type' => $entityType,
-      'target_entity_id' => $entityId,
-      'url' => $scanResult['url'] ?? '',
-      'triggered_by' => $triggeredBy,
-      'content_author' => $authorUid,
-      'status' => 'complete',
-      'count_critical' => $counts['critical'],
-      'count_serious' => $counts['serious'],
-      'count_moderate' => $counts['moderate'],
-      'count_minor' => $counts['minor'],
-    ]);
-    $scan->save();
+    $transaction = $this->database->startTransaction();
+    try {
+      $scanStorage = $this->entityTypeManager->getStorage('accessguard_scan');
+      $scan = $scanStorage->create([
+        'target_entity_type' => $entityType,
+        'target_entity_id' => $entityId,
+        'url' => $scanResult['url'] ?? '',
+        'triggered_by' => $triggeredBy,
+        'content_author' => $authorUid,
+        'status' => 'complete',
+        'count_critical' => $counts['critical'],
+        'count_serious' => $counts['serious'],
+        'count_moderate' => $counts['moderate'],
+        'count_minor' => $counts['minor'],
+      ]);
+      $scan->save();
 
-    $vStorage = $this->entityTypeManager->getStorage('accessguard_violation');
-    foreach ($violations as $key => $v) {
-      $vStorage->create([
-        'scan_id' => $scan->id(),
-        'rule_id' => $v['ruleId'] ?? '',
-        'impact' => $normalizedImpacts[$key],
-        'wcag_criterion' => $v['wcagCriterion'] ?? '',
-        'selector' => $v['selector'] ?? '',
-        'html_snippet' => $v['html'] ?? '',
-        'help_url' => $v['helpUrl'] ?? '',
-      ])->save();
+      $vStorage = $this->entityTypeManager->getStorage('accessguard_violation');
+      foreach ($violations as $key => $v) {
+        $vStorage->create([
+          'scan_id' => $scan->id(),
+          'rule_id' => $v['ruleId'] ?? '',
+          'impact' => $normalizedImpacts[$key],
+          'wcag_criterion' => $v['wcagCriterion'] ?? '',
+          'selector' => $v['selector'] ?? '',
+          'html_snippet' => $v['html'] ?? '',
+          'help_url' => $v['helpUrl'] ?? '',
+        ])->save();
+      }
+    }
+    catch (\Throwable $e) {
+      $transaction->rollBack();
+      throw $e;
     }
     return $scan;
   }

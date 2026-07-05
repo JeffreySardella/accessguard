@@ -4,7 +4,7 @@ services:
     arguments: ['@http_client', '@config.factory']
   accessguard.scan_recorder:
     class: Drupal\accessguard\Service\ScanRecorder
-    arguments: ['@entity_type.manager']
+    arguments: ['@entity_type.manager', '@database']
   accessguard.regression:
     class: Drupal\accessguard\Service\RegressionService
     arguments: ['@entity_type.manager']

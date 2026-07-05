@@ -45,6 +45,33 @@ function _accessguard_enqueue_if_published(\Drupal\node\NodeInterface $node) {
 }
 
 /**
+ * Implements hook_ENTITY_TYPE_delete() for nodes.
+ *
+ * Removes the scans and violations belonging to a deleted node.
+ */
+function accessguard_node_delete(\Drupal\node\NodeInterface $node) {
+  $etm = \Drupal::entityTypeManager();
+  $scanStorage = $etm->getStorage('accessguard_scan');
+  $scanIds = $scanStorage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('target_entity_type', 'node')
+    ->condition('target_entity_id', $node->id())
+    ->execute();
+  if (!$scanIds) {
+    return;
+  }
+  $violationStorage = $etm->getStorage('accessguard_violation');
+  $violationIds = $violationStorage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('scan_id', $scanIds, 'IN')
+    ->execute();
+  if ($violationIds) {
+    $violationStorage->delete($violationStorage->loadMultiple($violationIds));
+  }
+  $scanStorage->delete($scanStorage->loadMultiple($scanIds));
+}
+
+/**
  * Implements hook_cron().
  *
  * Enqueues published nodes that are unscanned or whose latest scan is stale.

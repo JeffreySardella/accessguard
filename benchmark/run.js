@@ -25,6 +25,7 @@ import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve('axe-core'), 'utf8');
@@ -116,7 +117,7 @@ async function main() {
   md += `\n**AccessGuard caught ${axeHits}/${FIXTURES.length} planted violations by exact rule id.**\n\n`;
   md += 'Notes: pa11y (HTML_CodeSniffer) is a different engine and reports its own error taxonomy, so its column is an error count, not a per-rule match. Lighthouse reads "n/a" unless `lighthouse` + `chrome-launcher` are installed; its accessibility audit uses a subset of axe-core. Detection is a commodity across these tools — AccessGuard\'s differentiator is the governance layer (historical tracking, publish-gating, author attribution, audit export), which none of these single-page tools provide.\n';
 
-  const outDir = path.dirname(new URL(import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
+  const outDir = path.dirname(fileURLToPath(import.meta.url));
   writeFileSync(path.join(outDir, 'RESULTS.md'), md);
   console.log(md);
 }

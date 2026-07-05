@@ -21,7 +21,7 @@ export function isBlockedIp(ip) {
     if (a === 100 && b >= 64 && b <= 127) return true;  // CGNAT
     if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmarking
     if (a === 192 && b === 0 && c === 0) return true;      // 192.0.0.0/24 IETF protocol
-    if (a >= 240) return true;                             // 240.0.0.0/4 reserved
+    if (a >= 224) return true;                            // 224.0.0.0/4 multicast + 240/4 reserved
     return false;
   }
 
@@ -29,6 +29,7 @@ export function isBlockedIp(ip) {
   if (low === '::1' || low === '::') return true;        // loopback / unspecified
   if (low.startsWith('fe80') || low.startsWith('fc') || low.startsWith('fd')) return true; // link-local / ULA
   if (low.startsWith('ff')) return true;                   // ff00::/8 multicast
+  if (low.startsWith('64:ff9b')) return true;             // NAT64
   return false;
 }
 
