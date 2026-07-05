@@ -49,9 +49,11 @@ Lighthouse's accessibility audit *uses axe-core under the hood* (a curated subse
 | Full WCAG 2.2 AA ruleset | subset | partial | ✅ |
 | Results stored & tracked over time | ❌ | ❌ | ✅ |
 | Site-wide compliance dashboard | ❌ | ❌ | ✅ |
-| Publish-gating / enforcement | ❌ | ❌ | 🔜 |
-| Author attribution | ❌ | ❌ | 🔜 |
-| Audit-ready report export | ❌ | ❌ | 🔜 |
+| Publish-gating / enforcement | ❌ | ❌ | ✅ |
+| Author attribution | ❌ | ❌ | ✅ |
+| Audit-ready report export | ❌ | ❌ | ✅ |
+
+See `benchmark/RESULTS.md` for an empirical detection comparison on the demo fixtures (run it yourself: `cd benchmark && npm install && npm run benchmark`).
 
 ## Security
 
@@ -85,16 +87,23 @@ You should see all six demo pages, each with the accessibility violation it was 
 ## What's built
 
 - **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard. 9 tests.
-- **`accessguard` module** — `accessguard_scan` and `accessguard_violation` entities; `ScanRunner` (calls the scanner) and `ScanRecorder` (persists results) services; a queue worker and a `drush accessguard:scan` command; a compliance dashboard at `/admin/reports/accessguard`.
+- **`accessguard` module**
+  - `accessguard_scan` and `accessguard_violation` entities
+  - `ScanRunner` (calls the scanner), `ScanRecorder` (persists results), and `RegressionService` (diffs a node's two latest scans) services
+  - a queue worker and a `drush accessguard:scan` command
+  - **cron site-wide re-scanning** of stale/unscanned published nodes
+  - a **compliance dashboard** at `/admin/reports/accessguard`, plus per-node detail pages with scan history, regression diff (new / fixed / persisting), and author attribution
+  - **publish-gating**: an entity validation constraint that blocks publishing a node whose latest scan has violations at/above a configured severity threshold (bypassable with a permission)
+  - **CSV audit export** (formula-injection-safe) at `/admin/reports/accessguard/export`
 - **`accessguard_demo` module** — a content type plus six pages, each seeded with one reliable WCAG violation, for exercising the pipeline.
+- **`benchmark/`** — a harness comparing AccessGuard's axe (WCAG 2.2 AA) against pa11y (and optionally Lighthouse) on the fixtures.
 
 ## Roadmap
 
-- Publish-gating: block content from going live when it introduces a violation above a severity threshold.
-- Author attribution and historical regression tracking (new / fixed / persisting).
-- Cron-driven site-wide re-scanning.
-- Audit-ready compliance report export.
-- Benchmark harness comparing AccessGuard, Lighthouse, and pa11y on the demo fixtures.
+- Attribute-based Drush command (currently the legacy discovery pattern, which works).
+- Configurable settings form UI (thresholds, intervals) instead of drush config.
+- PDF audit export and richer per-rule / per-author analytics.
+- DNS-rebinding hardening (pin the resolved IP into Puppeteer).
 
 ## Tech stack
 
