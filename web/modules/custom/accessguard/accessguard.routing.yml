@@ -26,3 +26,11 @@ accessguard.node_detail:
     parameters:
       node:
         type: 'entity:node'
+
+accessguard.settings_form:
+  path: '/admin/config/system/accessguard'
+  defaults:
+    _form: 'Drupal\accessguard\Form\SettingsForm'
+    _title: 'AccessGuard settings'
+  requirements:
+    _permission: 'administer accessguard'

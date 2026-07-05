@@ -95,12 +95,12 @@ You should see all six demo pages, each with the accessibility violation it was 
   - a **compliance dashboard** at `/admin/reports/accessguard`, plus per-node detail pages with scan history, regression diff (new / fixed / persisting), and author attribution
   - **publish-gating**: an entity validation constraint that blocks publishing a node whose latest scan has violations at/above a configured severity threshold (bypassable with a permission)
   - **CSV audit export** (formula-injection-safe) at `/admin/reports/accessguard/export`
+  - a **settings form** at /admin/config/system/accessguard
 - **`accessguard_demo` module** — a content type plus six pages, each seeded with one reliable WCAG violation, for exercising the pipeline.
 - **`benchmark/`** — a harness comparing AccessGuard's axe (WCAG 2.2 AA) against pa11y (and optionally Lighthouse) on the fixtures.
 
 ## Roadmap
 
-- Configurable settings form UI (thresholds, intervals) instead of drush config.
 - PDF audit export and richer per-rule / per-author analytics.
 - DNS-rebinding hardening (pin the resolved IP into Puppeteer).
 
