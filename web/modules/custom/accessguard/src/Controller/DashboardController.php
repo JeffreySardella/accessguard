@@ -148,7 +148,7 @@ class DashboardController extends ControllerBase {
 
     $handle = fopen('php://temp', 'r+');
     foreach ($rows as $row) {
-      fputcsv($handle, $row);
+      fputcsv($handle, array_map([$this, 'sanitizeCsvCell'], $row));
     }
     rewind($handle);
     $csv = stream_get_contents($handle);
@@ -158,6 +158,20 @@ class DashboardController extends ControllerBase {
     $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
     $response->headers->set('Content-Disposition', 'attachment; filename="accessguard-audit.csv"');
     return $response;
+  }
+
+  /**
+   * Neutralizes CSV formula injection.
+   *
+   * Spreadsheet apps treat a cell beginning with =, +, -, @, tab, or CR as a
+   * formula. Prefix any such string value with a single quote so it is read as
+   * text, not executed.
+   */
+  protected function sanitizeCsvCell($cell) {
+    if (is_string($cell) && $cell !== '' && in_array($cell[0], ['=', '+', '-', '@', "\t", "\r"], TRUE)) {
+      return "'" . $cell;
+    }
+    return $cell;
   }
 
 }
