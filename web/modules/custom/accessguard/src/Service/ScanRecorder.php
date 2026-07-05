@@ -5,12 +5,22 @@ namespace Drupal\accessguard\Service;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
+/**
+ * Persists a scan result as scan and violation entities.
+ */
 class ScanRecorder {
+
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
     protected Connection $database,
   ) {}
 
+  /**
+   * Records a scan result and its violations, in a single transaction.
+   *
+   * @return \Drupal\accessguard\Entity\AccessguardScan
+   *   The saved scan entity.
+   */
   public function record(string $entityType, int $entityId, ?int $authorUid, string $triggeredBy, array $scanResult) {
     $validImpacts = ['critical', 'serious', 'moderate', 'minor'];
     $violations = $scanResult['violations'] ?? [];
@@ -60,4 +70,5 @@ class ScanRecorder {
     }
     return $scan;
   }
+
 }

@@ -5,12 +5,22 @@ namespace Drupal\Tests\accessguard\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 
 /**
+ * Tests RegressionService's diffing of a node's two latest scans.
+ *
  * @group accessguard
  */
 class RegressionServiceTest extends KernelTestBase {
 
+  /**
+   * Modules to enable.
+   *
+   * @var array<int, string>
+   */
   protected static $modules = ['accessguard', 'node', 'user', 'system', 'field', 'text', 'filter'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
@@ -18,6 +28,9 @@ class RegressionServiceTest extends KernelTestBase {
     $this->installEntitySchema('user');
   }
 
+  /**
+   * Creates a completed scan for a node with the given rule violations.
+   */
   private function scanWithRules(int $nid, array $rules): void {
     $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
       'target_entity_type' => 'node',
@@ -37,6 +50,9 @@ class RegressionServiceTest extends KernelTestBase {
     }
   }
 
+  /**
+   * Tests that diff() classifies rules as new, fixed, or persisting.
+   */
   public function testDiffClassifiesNewFixedPersisting(): void {
     // Previous scan: image-alt + link-name. Latest: link-name + color-contrast.
     $this->scanWithRules(5, ['image-alt', 'link-name']);

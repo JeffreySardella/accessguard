@@ -11,6 +11,9 @@ use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
+/**
+ * Drush commands for AccessGuard.
+ */
 final class AccessguardCommands extends DrushCommands implements ContainerInjectionInterface {
 
   public function __construct(
@@ -22,6 +25,9 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
     parent::__construct();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public static function create(ContainerInterface $container): self {
     return new self(
       $container->get('entity_type.manager'),
@@ -39,7 +45,7 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
   #[CLI\Option(name: 'now', description: 'Run immediately instead of queueing.')]
   public function scan(int $nid, array $options = ['now' => FALSE]): void {
     if (empty($options['now'])) {
-      $this->queueFactory->get('accessguard_scan_queue')->createItem(['nid' => $nid]);
+      $this->queueFactory->get('accessguard_scan_queue')->createItem(['nid' => $nid, 'trigger' => 'manual']);
       $this->logger()->success("Queued scan for node $nid.");
       return;
     }

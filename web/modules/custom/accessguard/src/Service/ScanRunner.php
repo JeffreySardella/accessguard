@@ -18,7 +18,8 @@ class ScanRunner {
   /**
    * Scans a URL. Returns the decoded { url, violations[] } array.
    *
-   * @throws \RuntimeException on transport or decode failure.
+   * @throws \RuntimeException
+   *   On transport or decode failure.
    */
   public function scan(string $url): array {
     $endpoint = rtrim((string) $this->configFactory->get('accessguard.settings')->get('scanner_endpoint'), '/');

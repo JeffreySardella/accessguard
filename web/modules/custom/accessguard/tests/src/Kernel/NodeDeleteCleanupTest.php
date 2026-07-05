@@ -7,12 +7,22 @@ use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 
 /**
+ * Tests that deleting a node cleans up its scans and violations.
+ *
  * @group accessguard
  */
 class NodeDeleteCleanupTest extends KernelTestBase {
 
+  /**
+   * Modules to enable.
+   *
+   * @var array<int, string>
+   */
   protected static $modules = ['accessguard', 'node', 'user', 'system', 'field', 'text', 'filter'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
@@ -24,6 +34,9 @@ class NodeDeleteCleanupTest extends KernelTestBase {
     NodeType::create(['type' => 'page', 'name' => 'Page'])->save();
   }
 
+  /**
+   * Tests that deleting a node removes its scans and violations.
+   */
   public function testDeletingNodeRemovesItsScansAndViolations(): void {
     $node = Node::create(['type' => 'page', 'title' => 'x', 'status' => 1]);
     $node->save();

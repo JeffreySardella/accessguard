@@ -2,17 +2,29 @@
 
 namespace Drupal\Tests\accessguard\Kernel;
 
+use Drupal\Core\Session\AccountInterface;
+use Drupal\user\Entity\Role;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 
 /**
+ * Tests the AccessguardGate publish-gating constraint.
+ *
  * @group accessguard
  */
 class PublishGateTest extends KernelTestBase {
 
+  /**
+   * Modules to enable.
+   *
+   * @var array<int, string>
+   */
   protected static $modules = ['accessguard', 'node', 'user', 'system', 'field', 'text', 'filter'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
@@ -25,11 +37,14 @@ class PublishGateTest extends KernelTestBase {
     // Kernel tests default to an anonymous session (uid 0), which has no
     // "bypass accessguard gating" permission — exactly what we want to test.
     // Ensure the anonymous role exists to grant the bypass permission.
-    if (!\Drupal\user\Entity\Role::load(\Drupal\Core\Session\AccountInterface::ANONYMOUS_ROLE)) {
-      \Drupal\user\Entity\Role::create(['id' => \Drupal\Core\Session\AccountInterface::ANONYMOUS_ROLE, 'label' => 'Anonymous'])->save();
+    if (!Role::load(AccountInterface::ANONYMOUS_ROLE)) {
+      Role::create(['id' => AccountInterface::ANONYMOUS_ROLE, 'label' => 'Anonymous'])->save();
     }
   }
 
+  /**
+   * Creates a completed scan for a node with the given critical count.
+   */
   private function makeScan(int $nid, int $critical): void {
     \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
       'target_entity_type' => 'node',
@@ -39,6 +54,9 @@ class PublishGateTest extends KernelTestBase {
     ])->save();
   }
 
+  /**
+   * Counts the publish-gate constraint violations reported for a node.
+   */
   private function countGateViolations(Node $node): int {
     $count = 0;
     foreach ($node->validate() as $v) {
@@ -49,6 +67,9 @@ class PublishGateTest extends KernelTestBase {
     return $count;
   }
 
+  /**
+   * Tests that a first-time publish with no scan is not gated.
+   */
   public function testUnscannedPublishTransitionIsNotGated(): void {
     // A node being published for the first time with no scan is not gated.
     $node = Node::create(['type' => 'page', 'title' => 'clean', 'status' => 0]);
@@ -57,6 +78,9 @@ class PublishGateTest extends KernelTestBase {
     $this->assertSame(0, $this->countGateViolations($node));
   }
 
+  /**
+   * Tests that publishing a node with a critical scan is gated.
+   */
   public function testPublishTransitionWithCriticalScanIsGated(): void {
     // Draft node (stored unpublished) with a critical scan cannot be published.
     $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 0]);
@@ -66,6 +90,9 @@ class PublishGateTest extends KernelTestBase {
     $this->assertSame(1, $this->countGateViolations($node));
   }
 
+  /**
+   * Tests that editing an already-published node is not gated.
+   */
   public function testAlreadyPublishedNodeIsNotGatedOnEdit(): void {
     // Regression test for the deadlock: an already-published node with a bad
     // scan must remain saveable so an editor can save a fix.
@@ -76,6 +103,9 @@ class PublishGateTest extends KernelTestBase {
     $this->assertSame(0, $this->countGateViolations($node));
   }
 
+  /**
+   * Tests that disabling the gate allows publishing regardless of scans.
+   */
   public function testGateDisabledAllowsPublish(): void {
     \Drupal::configFactory()->getEditable('accessguard.settings')->set('gate_enabled', FALSE)->save();
     $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 0]);
@@ -85,9 +115,12 @@ class PublishGateTest extends KernelTestBase {
     $this->assertSame(0, $this->countGateViolations($node));
   }
 
+  /**
+   * Tests that the bypass permission skips the gate.
+   */
   public function testBypassPermissionSkipsGate(): void {
     // Give the anonymous role the bypass permission.
-    $role = \Drupal\user\Entity\Role::load(\Drupal\Core\Session\AccountInterface::ANONYMOUS_ROLE);
+    $role = Role::load(AccountInterface::ANONYMOUS_ROLE);
     $role->grantPermission('bypass accessguard gating')->save();
     $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 0]);
     $node->save();

@@ -7,17 +7,30 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\accessguard\Form\SettingsForm;
 
 /**
+ * Tests that the AccessGuard settings form saves its values.
+ *
  * @group accessguard
  */
 class SettingsFormTest extends KernelTestBase {
 
+  /**
+   * Modules to enable.
+   *
+   * @var array<int, string>
+   */
   protected static $modules = ['accessguard', 'system', 'user'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installConfig(['accessguard']);
   }
 
+  /**
+   * Tests that submitting the form persists the settings to config.
+   */
   public function testFormSavesSettings(): void {
     $form_state = new FormState();
     $form_state->setValues([

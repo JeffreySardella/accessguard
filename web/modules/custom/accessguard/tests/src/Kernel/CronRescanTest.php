@@ -7,12 +7,22 @@ use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 
 /**
+ * Tests cron's site-wide re-scanning of stale or unscanned published nodes.
+ *
  * @group accessguard
  */
 class CronRescanTest extends KernelTestBase {
 
+  /**
+   * Modules to enable.
+   *
+   * @var array<int, string>
+   */
   protected static $modules = ['accessguard', 'node', 'user', 'system', 'field', 'text', 'filter'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
@@ -24,6 +34,9 @@ class CronRescanTest extends KernelTestBase {
     NodeType::create(['type' => 'page', 'name' => 'Page'])->save();
   }
 
+  /**
+   * Tests that cron enqueues a published node that has never been scanned.
+   */
   public function testCronEnqueuesUnscannedPublishedNode(): void {
     $node = Node::create(['type' => 'page', 'title' => 'never scanned', 'status' => 1]);
     $node->save();
@@ -38,6 +51,9 @@ class CronRescanTest extends KernelTestBase {
     $this->assertSame(1, $queue->numberOfItems() - $before);
   }
 
+  /**
+   * Tests that cron skips a node whose latest scan is still fresh.
+   */
   public function testCronSkipsRecentlyScannedNode(): void {
     $node = Node::create(['type' => 'page', 'title' => 'fresh', 'status' => 1]);
     $node->save();
@@ -56,6 +72,22 @@ class CronRescanTest extends KernelTestBase {
 
     // Cron adds nothing because the node was recently scanned.
     $this->assertSame(0, $queue->numberOfItems() - $before);
+  }
+
+  /**
+   * Tests that cron-enqueued items carry the 'cron' trigger in their payload.
+   */
+  public function testCronEnqueuesWithCronTrigger(): void {
+    $node = Node::create(['type' => 'page', 'title' => 't', 'status' => 1]);
+    $node->save();
+    $queue = \Drupal::queue('accessguard_scan_queue');
+    // Drain anything the save hook queued.
+    while ($item = $queue->claimItem()) {
+      $queue->deleteItem($item);
+    }
+    accessguard_cron();
+    $item = $queue->claimItem();
+    $this->assertSame('cron', $item->data['trigger'] ?? NULL);
   }
 
 }

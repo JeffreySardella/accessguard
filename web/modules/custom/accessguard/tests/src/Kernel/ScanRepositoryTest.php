@@ -5,12 +5,22 @@ namespace Drupal\Tests\accessguard\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 
 /**
+ * Tests ScanRepository's aggregate lookups over accessguard_scan.
+ *
  * @group accessguard
  */
 class ScanRepositoryTest extends KernelTestBase {
 
+  /**
+   * Modules to enable.
+   *
+   * @var array<int, string>
+   */
   protected static $modules = ['accessguard', 'node', 'user', 'system', 'field', 'text', 'filter'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
@@ -18,6 +28,9 @@ class ScanRepositoryTest extends KernelTestBase {
     $this->installEntitySchema('user');
   }
 
+  /**
+   * Creates a scan entity with the given node id and created timestamp.
+   */
   private function makeScan(int $nid, int $created): int {
     $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
       'target_entity_type' => 'node',
@@ -29,6 +42,9 @@ class ScanRepositoryTest extends KernelTestBase {
     return (int) $scan->id();
   }
 
+  /**
+   * Tests the latest-scan-id and latest-created lookups per node.
+   */
   public function testLatestScanIdAndCreatedPerNode(): void {
     // Node 7: two scans; node 9: one scan.
     $this->makeScan(7, 1000);

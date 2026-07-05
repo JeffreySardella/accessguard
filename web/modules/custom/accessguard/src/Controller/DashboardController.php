@@ -4,6 +4,7 @@ namespace Drupal\accessguard\Controller;
 
 use Drupal\accessguard\Csv\CsvSafe;
 use Drupal\accessguard\Repository\ScanRepository;
+use Drupal\accessguard\Service\RegressionService;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
@@ -23,13 +24,18 @@ class DashboardController extends ControllerBase {
     protected EntityTypeManagerInterface $entityTypeManagerService,
     protected DateFormatterInterface $dateFormatter,
     protected ScanRepository $scanRepository,
+    protected RegressionService $regressionService,
   ) {}
 
+  /**
+   * {@inheritdoc}
+   */
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('entity_type.manager'),
       $container->get('date.formatter'),
       $container->get('accessguard.scan_repository'),
+      $container->get('accessguard.regression'),
     );
   }
 
@@ -196,7 +202,7 @@ class DashboardController extends ControllerBase {
       ];
     }
 
-    $diff = \Drupal::service('accessguard.regression')->diff($nid);
+    $diff = $this->regressionService->diff($nid);
 
     $build = [];
     $build['title'] = [
@@ -217,7 +223,13 @@ class DashboardController extends ControllerBase {
     $build['history'] = [
       '#type' => 'table',
       '#caption' => $this->t('Scan history'),
-      '#header' => [$this->t('Date'), $this->t('Critical'), $this->t('Serious'), $this->t('Moderate'), $this->t('Minor')],
+      '#header' => [
+        $this->t('Date'),
+        $this->t('Critical'),
+        $this->t('Serious'),
+        $this->t('Moderate'),
+        $this->t('Minor'),
+      ],
       '#rows' => $historyRows,
       '#empty' => $this->t('No scans yet.'),
     ];

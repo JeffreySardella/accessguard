@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scanner:
+    name: Scanner (Jest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+        working-directory: scanner
+      - run: npm test
+        working-directory: scanner
+
+  drupal-tests:
+    name: Drupal (PHPUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, pdo_sqlite, sqlite3, mbstring, dom, curl
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - name: PHPUnit (Unit + Kernel)
+        env:
+          SIMPLETEST_DB: "sqlite://localhost//tmp/test.sqlite"
+        run: vendor/bin/phpunit -c web/core web/modules/custom/accessguard/tests
+
+  coding-standards:
+    name: Drupal coding standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - run: vendor/bin/phpcs --standard=Drupal,DrupalPractice --extensions=php,module,inc,install,yml web/modules/custom/accessguard

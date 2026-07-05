@@ -15,6 +15,7 @@ class RegressionService {
    * Diffs the two most recent scans of a node.
    *
    * @return array{new: string[], fixed: string[], persisting: string[], latest_scan: ?string, previous_scan: ?string}
+   *   The regression diff, keyed as shown above.
    */
   public function diff(int $nid): array {
     $scanStorage = $this->entityTypeManager->getStorage('accessguard_scan');

@@ -10,14 +10,23 @@ use Drupal\Core\Form\FormStateInterface;
  */
 class SettingsForm extends ConfigFormBase {
 
+  /**
+   * {@inheritdoc}
+   */
   protected function getEditableConfigNames(): array {
     return ['accessguard.settings'];
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function getFormId(): string {
     return 'accessguard_settings';
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $config = $this->config('accessguard.settings');
 
@@ -65,6 +74,9 @@ class SettingsForm extends ConfigFormBase {
     return parent::buildForm($form, $form_state);
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $this->config('accessguard.settings')
       ->set('scanner_endpoint', $form_state->getValue('scanner_endpoint'))

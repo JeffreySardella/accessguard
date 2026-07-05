@@ -26,6 +26,9 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 )]
 class AccessguardViolation extends ContentEntityBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type) {
     $fields = parent::baseFieldDefinitions($entity_type);
 

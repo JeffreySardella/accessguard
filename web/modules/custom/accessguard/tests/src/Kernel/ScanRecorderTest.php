@@ -4,9 +4,23 @@ namespace Drupal\Tests\accessguard\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 
+/**
+ * Tests that ScanRecorder persists a scan result and its violations.
+ *
+ * @group accessguard
+ */
 class ScanRecorderTest extends KernelTestBase {
+
+  /**
+   * Modules to enable.
+   *
+   * @var array<int, string>
+   */
   protected static $modules = ['accessguard', 'user', 'system'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
@@ -14,13 +28,31 @@ class ScanRecorderTest extends KernelTestBase {
     $this->installEntitySchema('user');
   }
 
+  /**
+   * Tests that record() creates the scan entity and its violation entities.
+   */
   public function testRecordCreatesScanAndViolations(): void {
-    $result = ['url' => 'http://x/node/5', 'violations' => [
-      ['ruleId' => 'image-alt', 'impact' => 'critical', 'wcagCriterion' => 'wcag2a',
-       'selector' => 'img', 'html' => '<img>', 'helpUrl' => 'http://h'],
-      ['ruleId' => 'link-name', 'impact' => 'serious', 'wcagCriterion' => 'wcag2a',
-       'selector' => 'a', 'html' => '<a>', 'helpUrl' => 'http://h'],
-    ]];
+    $result = [
+      'url' => 'http://x/node/5',
+      'violations' => [
+      [
+        'ruleId' => 'image-alt',
+        'impact' => 'critical',
+        'wcagCriterion' => 'wcag2a',
+        'selector' => 'img',
+        'html' => '<img>',
+        'helpUrl' => 'http://h',
+      ],
+      [
+        'ruleId' => 'link-name',
+        'impact' => 'serious',
+        'wcagCriterion' => 'wcag2a',
+        'selector' => 'a',
+        'html' => '<a>',
+        'helpUrl' => 'http://h',
+      ],
+      ],
+    ];
     $recorder = $this->container->get('accessguard.scan_recorder');
     $scan = $recorder->record('node', 5, NULL, 'manual', $result);
 
@@ -31,4 +63,5 @@ class ScanRecorderTest extends KernelTestBase {
       ->loadByProperties(['scan_id' => $scan->id()]);
     $this->assertCount(2, $violations);
   }
+
 }

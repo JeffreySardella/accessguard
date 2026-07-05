@@ -21,6 +21,9 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
     protected AccountProxyInterface $currentUser,
   ) {}
 
+  /**
+   * {@inheritdoc}
+   */
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('entity_type.manager'),

@@ -14,7 +14,8 @@ class ScanRepository {
   /**
    * Latest scan entity id per node (latest = highest scan id).
    *
-   * @return array<int, int> node id => scan id
+   * @return array<int, int>
+   *   Node id => scan id.
    */
   public function latestScanIdByNode(): array {
     $rows = $this->database->query(
@@ -27,7 +28,8 @@ class ScanRepository {
   /**
    * Latest scan timestamp per node, without loading any entity.
    *
-   * @return array<int, int> node id => created timestamp
+   * @return array<int, int>
+   *   Node id => created timestamp.
    */
   public function latestScanCreatedByNode(): array {
     $rows = $this->database->query(

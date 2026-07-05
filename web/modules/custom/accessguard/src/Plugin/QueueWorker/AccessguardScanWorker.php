@@ -13,14 +13,20 @@ use Drupal\Core\Queue\SuspendQueueException;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
+/**
+ * Processes queued accessibility scan jobs for a node.
+ */
 #[QueueWorker(
   id: 'accessguard_scan_queue',
   title: new TranslatableMarkup('AccessGuard scan queue'),
   cron: ['time' => 60],
 )]
 class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
+
   public function __construct(
-    array $configuration, $plugin_id, $plugin_definition,
+    array $configuration,
+    $plugin_id,
+    $plugin_definition,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected ScanRunner $scanRunner,
     protected ScanRecorder $scanRecorder,
@@ -29,12 +35,18 @@ class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryP
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public static function create(ContainerInterface $c, array $configuration, $plugin_id, $plugin_definition) {
     return new static($configuration, $plugin_id, $plugin_definition,
       $c->get('entity_type.manager'), $c->get('accessguard.scan_runner'), $c->get('accessguard.scan_recorder'),
       $c->get('logger.factory'));
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function processItem($data): void {
     $node = $this->entityTypeManager->getStorage('node')->load($data['nid']);
     if (!$node) {
@@ -57,6 +69,7 @@ class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryP
       throw new SuspendQueueException($e->getMessage(), 0, $e);
     }
 
-    $this->scanRecorder->record('node', (int) $node->id(), $author, 'cron', $result);
+    $this->scanRecorder->record('node', (int) $node->id(), $author, $data['trigger'] ?? 'cron', $result);
   }
+
 }

@@ -5,6 +5,8 @@
  * AccessGuard module hooks.
  */
 
+use Drupal\node\NodeInterface;
+
 /**
  * Implements hook_entity_type_alter().
  */
@@ -17,14 +19,14 @@ function accessguard_entity_type_alter(array &$entity_types) {
 /**
  * Implements hook_ENTITY_TYPE_insert() for nodes.
  */
-function accessguard_node_insert(\Drupal\node\NodeInterface $node) {
+function accessguard_node_insert(NodeInterface $node) {
   _accessguard_enqueue_if_published($node);
 }
 
 /**
  * Implements hook_ENTITY_TYPE_update() for nodes.
  */
-function accessguard_node_update(\Drupal\node\NodeInterface $node) {
+function accessguard_node_update(NodeInterface $node) {
   _accessguard_enqueue_if_published($node);
 }
 
@@ -35,12 +37,12 @@ function accessguard_node_update(\Drupal\node\NodeInterface $node) {
  * content as it changes (and, with the publish gate, keeps the dashboard
  * current after an editor fixes an issue).
  */
-function _accessguard_enqueue_if_published(\Drupal\node\NodeInterface $node) {
+function _accessguard_enqueue_if_published(NodeInterface $node) {
   if (!\Drupal::config('accessguard.settings')->get('rescan_enabled')) {
     return;
   }
   if ($node->isPublished()) {
-    \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id()]);
+    \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
   }
 }
 
@@ -49,7 +51,7 @@ function _accessguard_enqueue_if_published(\Drupal\node\NodeInterface $node) {
  *
  * Removes the scans and violations belonging to a deleted node.
  */
-function accessguard_node_delete(\Drupal\node\NodeInterface $node) {
+function accessguard_node_delete(NodeInterface $node) {
   $etm = \Drupal::entityTypeManager();
   $scanStorage = $etm->getStorage('accessguard_scan');
   $scanIds = $scanStorage->getQuery()
@@ -104,7 +106,7 @@ function accessguard_cron() {
   foreach ($nids as $nid) {
     $last = $latest[$nid] ?? 0;
     if ($last < $cutoff) {
-      $queue->createItem(['nid' => (int) $nid]);
+      $queue->createItem(['nid' => (int) $nid, 'trigger' => 'cron']);
       if (++$enqueued >= $batch) {
         break;
       }

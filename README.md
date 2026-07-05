@@ -1,5 +1,7 @@
 # AccessGuard
 
+![CI](https://github.com/JeffreySardella/accessguard/actions/workflows/ci.yml/badge.svg)
+
 **Accessibility compliance governance for Drupal, built on axe-core.**
 
 Government and enterprise websites are legally required to meet WCAG 2.2 / Section 508, but content authors introduce accessibility violations constantly, and existing tools only ever tell you what's broken *right now* on *one page*. AccessGuard turns point-in-time detection into continuous, accountable governance inside Drupal.
