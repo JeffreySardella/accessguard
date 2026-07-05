@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { assertUrlAllowed } from './urlGuard.js';
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve('axe-core');
@@ -15,6 +16,23 @@ export async function runScan(url) {
   });
   try {
     const page = await browser.newPage();
+
+    // Guard every request the page makes (the top-level navigation, any
+    // redirects it follows, and every subresource) against the SSRF policy —
+    // not just the URL we were handed. Local schemes (file:, data:, about:,
+    // blob:) are not network SSRF vectors and pass through.
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const reqUrl = req.url();
+      if (!/^https?:/i.test(reqUrl)) {
+        req.continue();
+        return;
+      }
+      assertUrlAllowed(reqUrl)
+        .then(() => req.continue())
+        .catch(() => req.abort('blockedbyclient'));
+    });
+
     const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
     // For http(s), refuse to "scan" an error page (403/404/500). Otherwise an
     // error page's markup would be recorded against the target and could, e.g.,

@@ -44,9 +44,13 @@ function allowPrivateTargets() {
 // also rejects hosts that resolve to a private/loopback/link-local address
 // (SSRF protection); that IP-range check is bypassed only when
 // SCANNER_ALLOW_PRIVATE is explicitly set.
-// KNOWN LIMITATION: does not pin the resolved IP into Puppeteer, so a DNS
-// rebinding attack between this check and page load is not fully closed. A
-// follow-up should pass the validated IP to runScan via --host-resolver-rules.
+//
+// scan.js additionally runs this guard on every request the page makes (the
+// navigation, redirects it follows, and subresources) via request
+// interception, so redirect-to-internal and subresource-to-internal vectors
+// are covered. KNOWN LIMITATION: the resolved IP is not pinned into Puppeteer,
+// so a DNS-rebinding race between this check and the actual connection remains
+// theoretically open; closing it fully would require --host-resolver-rules.
 export async function assertUrlAllowed(rawUrl) {
   let parsed;
   try {
