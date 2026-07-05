@@ -69,15 +69,8 @@ function accessguard_cron() {
     return;
   }
 
-  // Latest scan timestamp per target node.
-  $latest = [];
-  foreach ($entity_type_manager->getStorage('accessguard_scan')->loadMultiple() as $scan) {
-    $nid = $scan->get('target_entity_id')->value;
-    $created = (int) $scan->get('created')->value;
-    if (!isset($latest[$nid]) || $created > $latest[$nid]) {
-      $latest[$nid] = $created;
-    }
-  }
+  // Latest scan timestamp per node (aggregate query, no entity hydration).
+  $latest = \Drupal::service('accessguard.scan_repository')->latestScanCreatedByNode();
 
   $queue = \Drupal::queue('accessguard_scan_queue');
   $enqueued = 0;

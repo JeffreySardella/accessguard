@@ -3,6 +3,7 @@
 namespace Drupal\accessguard\Controller;
 
 use Drupal\accessguard\Csv\CsvSafe;
+use Drupal\accessguard\Repository\ScanRepository;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -20,12 +21,14 @@ class DashboardController extends ControllerBase {
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManagerService,
     protected DateFormatterInterface $dateFormatter,
+    protected ScanRepository $scanRepository,
   ) {}
 
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('entity_type.manager'),
       $container->get('date.formatter'),
+      $container->get('accessguard.scan_repository'),
     );
   }
 
@@ -36,14 +39,11 @@ class DashboardController extends ControllerBase {
     $scanStorage = $this->entityTypeManagerService->getStorage('accessguard_scan');
     $nodeStorage = $this->entityTypeManagerService->getStorage('node');
 
-    // Keep only the latest scan per target node.
+    // Load only the latest scan per node (not every scan ever run).
+    $latestIds = $this->scanRepository->latestScanIdByNode();
     $latest = [];
-    foreach ($scanStorage->loadMultiple() as $scan) {
-      $nid = $scan->get('target_entity_id')->value;
-      $created = (int) $scan->get('created')->value;
-      if (!isset($latest[$nid]) || $created > (int) $latest[$nid]->get('created')->value) {
-        $latest[$nid] = $scan;
-      }
+    foreach ($scanStorage->loadMultiple(array_values($latestIds)) as $scan) {
+      $latest[(int) $scan->get('target_entity_id')->value] = $scan;
     }
 
     $totals = ['critical' => 0, 'serious' => 0, 'moderate' => 0, 'minor' => 0];
@@ -113,14 +113,11 @@ class DashboardController extends ControllerBase {
     $violationStorage = $this->entityTypeManagerService->getStorage('accessguard_violation');
     $nodeStorage = $this->entityTypeManagerService->getStorage('node');
 
-    // Latest scan per node.
+    // Load only the latest scan per node (not every scan ever run).
+    $latestIds = $this->scanRepository->latestScanIdByNode();
     $latest = [];
-    foreach ($scanStorage->loadMultiple() as $scan) {
-      $nid = $scan->get('target_entity_id')->value;
-      $created = (int) $scan->get('created')->value;
-      if (!isset($latest[$nid]) || $created > (int) $latest[$nid]->get('created')->value) {
-        $latest[$nid] = $scan;
-      }
+    foreach ($scanStorage->loadMultiple(array_values($latestIds)) as $scan) {
+      $latest[(int) $scan->get('target_entity_id')->value] = $scan;
     }
 
     $rows = [];
