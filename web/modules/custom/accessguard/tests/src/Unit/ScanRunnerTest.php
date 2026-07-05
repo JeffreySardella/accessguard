@@ -26,4 +26,22 @@ class ScanRunnerTest extends UnitTestCase {
     $this->assertSame('image-alt', $result['violations'][0]['ruleId']);
   }
 
+  public function testMalformedJsonThrows(): void {
+    $mock = new MockHandler([new Response(200, [], 'null')]);
+    $client = new Client(['handler' => HandlerStack::create($mock)]);
+    $config = $this->getConfigFactoryStub(['accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000']]);
+    $runner = new ScanRunner($client, $config);
+    $this->expectException(\RuntimeException::class);
+    $runner->scan('http://x/node/1');
+  }
+
+  public function testHttpErrorThrows(): void {
+    $mock = new MockHandler([new Response(500, [], 'oops')]);
+    $client = new Client(['handler' => HandlerStack::create($mock)]);
+    $config = $this->getConfigFactoryStub(['accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000']]);
+    $runner = new ScanRunner($client, $config);
+    $this->expectException(\RuntimeException::class);
+    $runner->scan('http://x/node/1');
+  }
+
 }

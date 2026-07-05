@@ -24,6 +24,10 @@ class PublishGateTest extends KernelTestBase {
     NodeType::create(['type' => 'page', 'name' => 'Page'])->save();
     // Kernel tests default to an anonymous session (uid 0), which has no
     // "bypass accessguard gating" permission — exactly what we want to test.
+    // Ensure the anonymous role exists to grant the bypass permission.
+    if (!\Drupal\user\Entity\Role::load(\Drupal\Core\Session\AccountInterface::ANONYMOUS_ROLE)) {
+      \Drupal\user\Entity\Role::create(['id' => \Drupal\Core\Session\AccountInterface::ANONYMOUS_ROLE, 'label' => 'Anonymous'])->save();
+    }
   }
 
   private function makeScan(int $nid, int $critical): void {
@@ -69,6 +73,26 @@ class PublishGateTest extends KernelTestBase {
     $node->save();
     $this->makeScan((int) $node->id(), 1);
     $node->set('title', 'fixed title');
+    $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  public function testGateDisabledAllowsPublish(): void {
+    \Drupal::configFactory()->getEditable('accessguard.settings')->set('gate_enabled', FALSE)->save();
+    $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 0]);
+    $node->save();
+    $this->makeScan((int) $node->id(), 1);
+    $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  public function testBypassPermissionSkipsGate(): void {
+    // Give the anonymous role the bypass permission.
+    $role = \Drupal\user\Entity\Role::load(\Drupal\Core\Session\AccountInterface::ANONYMOUS_ROLE);
+    $role->grantPermission('bypass accessguard gating')->save();
+    $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 0]);
+    $node->save();
+    $this->makeScan((int) $node->id(), 1);
+    $node->setPublished();
     $this->assertSame(0, $this->countGateViolations($node));
   }
 

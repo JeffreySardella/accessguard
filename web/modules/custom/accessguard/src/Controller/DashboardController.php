@@ -2,6 +2,7 @@
 
 namespace Drupal\accessguard\Controller;
 
+use Drupal\accessguard\Csv\CsvSafe;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -150,7 +151,7 @@ class DashboardController extends ControllerBase {
 
     $handle = fopen('php://temp', 'r+');
     foreach ($rows as $row) {
-      fputcsv($handle, array_map([$this, 'sanitizeCsvCell'], $row));
+      fputcsv($handle, array_map([CsvSafe::class, 'cell'], $row));
     }
     rewind($handle);
     $csv = stream_get_contents($handle);
@@ -224,20 +225,6 @@ class DashboardController extends ControllerBase {
     ];
     $build['#cache'] = ['max-age' => 0];
     return $build;
-  }
-
-  /**
-   * Neutralizes CSV formula injection.
-   *
-   * Spreadsheet apps treat a cell beginning with =, +, -, @, tab, or CR as a
-   * formula. Prefix any such string value with a single quote so it is read as
-   * text, not executed.
-   */
-  protected function sanitizeCsvCell($cell) {
-    if (is_string($cell) && $cell !== '' && in_array($cell[0], ['=', '+', '-', '@', "\t", "\r"], TRUE)) {
-      return "'" . $cell;
-    }
-    return $cell;
   }
 
 }
