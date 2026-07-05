@@ -45,3 +45,4 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+benchmark/node_modules/

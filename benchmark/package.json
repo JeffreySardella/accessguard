@@ -1,0 +1,15 @@
+{
+  "name": "accessguard-benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Compares AccessGuard's axe-core (WCAG 2.2 AA) against pa11y (and optionally Lighthouse) on fixtures with known planted violations.",
+  "scripts": {
+    "benchmark": "node run.js"
+  },
+  "dependencies": {
+    "axe-core": "^4.10.0",
+    "pa11y": "^8.0.0",
+    "puppeteer": "^23.0.0"
+  }
+}
