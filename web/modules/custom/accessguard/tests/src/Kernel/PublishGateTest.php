@@ -35,30 +35,41 @@ class PublishGateTest extends KernelTestBase {
     ])->save();
   }
 
-  public function testUnscannedPublishedNodeIsNotGated(): void {
-    $node = Node::create(['type' => 'page', 'title' => 'clean', 'status' => 1]);
-    $node->save();
-    // No scan exists -> no AccessguardGate violation.
+  private function countGateViolations(Node $node): int {
     $count = 0;
     foreach ($node->validate() as $v) {
       if (str_contains((string) $v->getMessage(), 'cannot be published')) {
         $count++;
       }
     }
-    $this->assertSame(0, $count);
+    return $count;
   }
 
-  public function testPublishedNodeWithCriticalScanIsGated(): void {
+  public function testUnscannedPublishTransitionIsNotGated(): void {
+    // A node being published for the first time with no scan is not gated.
+    $node = Node::create(['type' => 'page', 'title' => 'clean', 'status' => 0]);
+    $node->save();
+    $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  public function testPublishTransitionWithCriticalScanIsGated(): void {
+    // Draft node (stored unpublished) with a critical scan cannot be published.
+    $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 0]);
+    $node->save();
+    $this->makeScan((int) $node->id(), 1);
+    $node->setPublished();
+    $this->assertSame(1, $this->countGateViolations($node));
+  }
+
+  public function testAlreadyPublishedNodeIsNotGatedOnEdit(): void {
+    // Regression test for the deadlock: an already-published node with a bad
+    // scan must remain saveable so an editor can save a fix.
     $node = Node::create(['type' => 'page', 'title' => 'bad', 'status' => 1]);
     $node->save();
     $this->makeScan((int) $node->id(), 1);
-    $count = 0;
-    foreach ($node->validate() as $v) {
-      if (str_contains((string) $v->getMessage(), 'cannot be published')) {
-        $count++;
-      }
-    }
-    $this->assertSame(1, $count);
+    $node->set('title', 'fixed title');
+    $this->assertSame(0, $this->countGateViolations($node));
   }
 
 }

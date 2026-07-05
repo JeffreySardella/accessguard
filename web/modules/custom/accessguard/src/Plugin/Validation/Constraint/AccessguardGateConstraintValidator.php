@@ -44,6 +44,15 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       return;
     }
 
+    // Only gate the transition INTO a published state. If the node is already
+    // published in storage, allow the save — otherwise an editor could never
+    // save a fix, because the pre-fix scan would keep blocking it. Edits are
+    // re-scanned via the save hook, and cron keeps published content reviewed.
+    $stored = $this->entityTypeManager->getStorage('node')->loadUnchanged($entity->id());
+    if ($stored && $stored->isPublished()) {
+      return;
+    }
+
     $rank = ['minor' => 1, 'moderate' => 2, 'serious' => 3, 'critical' => 4];
     $thresholdName = $config->get('gate_threshold') ?: 'critical';
     $threshold = $rank[$thresholdName] ?? 4;
@@ -54,6 +63,7 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       ->condition('target_entity_type', 'node')
       ->condition('target_entity_id', $entity->id())
       ->sort('created', 'DESC')
+      ->sort('id', 'DESC')
       ->range(0, 1)
       ->execute();
     if (!$ids) {

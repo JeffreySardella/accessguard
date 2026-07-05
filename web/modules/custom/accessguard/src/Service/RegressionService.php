@@ -23,6 +23,7 @@ class RegressionService {
       ->condition('target_entity_type', 'node')
       ->condition('target_entity_id', $nid)
       ->sort('created', 'DESC')
+      ->sort('id', 'DESC')
       ->range(0, 2)
       ->execute());
 

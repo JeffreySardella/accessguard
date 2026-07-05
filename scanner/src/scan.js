@@ -15,7 +15,14 @@ export async function runScan(url) {
   });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+    const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+    // For http(s), refuse to "scan" an error page (403/404/500). Otherwise an
+    // error page's markup would be recorded against the target and could, e.g.,
+    // wrongly clear the publish gate. file:// navigations return no response
+    // object, so only enforce this when a response is present.
+    if (response && !response.ok()) {
+      throw new Error(`Target returned HTTP ${response.status()}`);
+    }
     await page.evaluate(axeSource);
     const raw = await page.evaluate(async (tags) => {
       const results = await window.axe.run(document, { runOnly: { type: 'tag', values: tags } });

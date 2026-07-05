@@ -28,12 +28,14 @@ class CronRescanTest extends KernelTestBase {
     $node = Node::create(['type' => 'page', 'title' => 'never scanned', 'status' => 1]);
     $node->save();
 
+    // Saving a published node also enqueues via the save hook, so measure the
+    // count that cron specifically adds as a delta.
     $queue = \Drupal::queue('accessguard_scan_queue');
-    $this->assertSame(0, $queue->numberOfItems());
+    $before = $queue->numberOfItems();
 
     accessguard_cron();
 
-    $this->assertSame(1, $queue->numberOfItems());
+    $this->assertSame(1, $queue->numberOfItems() - $before);
   }
 
   public function testCronSkipsRecentlyScannedNode(): void {
@@ -47,9 +49,13 @@ class CronRescanTest extends KernelTestBase {
       'created' => \Drupal::time()->getRequestTime(),
     ])->save();
 
+    $queue = \Drupal::queue('accessguard_scan_queue');
+    $before = $queue->numberOfItems();
+
     accessguard_cron();
 
-    $this->assertSame(0, \Drupal::queue('accessguard_scan_queue')->numberOfItems());
+    // Cron adds nothing because the node was recently scanned.
+    $this->assertSame(0, $queue->numberOfItems() - $before);
   }
 
 }

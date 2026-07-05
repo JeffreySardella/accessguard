@@ -15,6 +15,36 @@ function accessguard_entity_type_alter(array &$entity_types) {
 }
 
 /**
+ * Implements hook_ENTITY_TYPE_insert() for nodes.
+ */
+function accessguard_node_insert(\Drupal\node\NodeInterface $node) {
+  _accessguard_enqueue_if_published($node);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_update() for nodes.
+ */
+function accessguard_node_update(\Drupal\node\NodeInterface $node) {
+  _accessguard_enqueue_if_published($node);
+}
+
+/**
+ * Enqueues a scan for a node when it is published.
+ *
+ * This is what makes a save trigger a re-scan, so violation data tracks the
+ * content as it changes (and, with the publish gate, keeps the dashboard
+ * current after an editor fixes an issue).
+ */
+function _accessguard_enqueue_if_published(\Drupal\node\NodeInterface $node) {
+  if (!\Drupal::config('accessguard.settings')->get('rescan_enabled')) {
+    return;
+  }
+  if ($node->isPublished()) {
+    \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id()]);
+  }
+}
+
+/**
  * Implements hook_cron().
  *
  * Enqueues published nodes that are unscanned or whose latest scan is stale.
