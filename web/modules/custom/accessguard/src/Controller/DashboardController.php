@@ -5,6 +5,7 @@ namespace Drupal\accessguard\Controller;
 use Drupal\accessguard\Csv\CsvSafe;
 use Drupal\accessguard\Repository\ScanRepository;
 use Drupal\accessguard\Service\RegressionService;
+use Drupal\accessguard\Service\WaiverMatcher;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
@@ -25,6 +26,7 @@ class DashboardController extends ControllerBase {
     protected DateFormatterInterface $dateFormatter,
     protected ScanRepository $scanRepository,
     protected RegressionService $regressionService,
+    protected WaiverMatcher $waiverMatcher,
   ) {}
 
   /**
@@ -36,6 +38,7 @@ class DashboardController extends ControllerBase {
       $container->get('date.formatter'),
       $container->get('accessguard.scan_repository'),
       $container->get('accessguard.regression'),
+      $container->get('accessguard.waiver_matcher'),
     );
   }
 
@@ -128,18 +131,21 @@ class DashboardController extends ControllerBase {
     }
 
     $rows = [];
-    $rows[] = ['Page', 'Node ID', 'URL', 'Scan date', 'Rule', 'Impact', 'WCAG', 'Selector'];
+    $rows[] = ['Page', 'Node ID', 'URL', 'Scan date', 'Rule', 'Impact', 'WCAG', 'Selector', 'Status'];
     foreach ($latest as $nid => $scan) {
       $node = $nodeStorage->load($nid);
+      $waivedByNode = $this->waiverMatcher->waivedFingerprints($nid);
       $title = $node ? $node->label() : ('Node ' . $nid);
       $date = $this->dateFormatter->format((int) $scan->get('created')->value, 'short');
       $url = $scan->get('url')->value;
       $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
       if (!$violations) {
-        $rows[] = [$title, $nid, $url, $date, '(no violations)', '', '', ''];
+        $rows[] = [$title, $nid, $url, $date, '(no violations)', '', '', '', ''];
         continue;
       }
       foreach ($violations as $v) {
+        $fp = WaiverMatcher::fingerprint($v->get('rule_id')->value, (string) $v->get('selector')->value);
+        $status = $waivedByNode[$fp] ?? 'open';
         $rows[] = [
           $title,
           $nid,
@@ -149,6 +155,7 @@ class DashboardController extends ControllerBase {
           $v->get('impact')->value,
           $v->get('wcag_criterion')->value,
           $v->get('selector')->value,
+          $status,
         ];
       }
     }
@@ -219,6 +226,34 @@ class DashboardController extends ControllerBase {
         $this->t('Fixed: @v', ['@v' => $diff['fixed'] ? implode(', ', $diff['fixed']) : $this->t('none')]),
         $this->t('Still present: @v', ['@v' => $diff['persisting'] ? implode(', ', $diff['persisting']) : $this->t('none')]),
       ],
+    ];
+    $latestScanId = $diff['latest_scan'] ?? NULL;
+    $waived = $this->waiverMatcher->waivedFingerprints($nid);
+    $vRows = [];
+    if ($latestScanId) {
+      $violations = $this->entityTypeManagerService->getStorage('accessguard_violation')
+        ->loadByProperties(['scan_id' => $latestScanId]);
+      foreach ($violations as $v) {
+        $rule = $v->get('rule_id')->value;
+        $selector = (string) $v->get('selector')->value;
+        $fp = WaiverMatcher::fingerprint($rule, $selector);
+        if (isset($waived[$fp])) {
+          $statusCell = $this->t('Waived (@s)', ['@s' => str_replace('_', ' ', $waived[$fp])]);
+        }
+        else {
+          $statusCell = Link::fromTextAndUrl($this->t('Waive'), Url::fromRoute('accessguard.waive', ['node' => $nid], [
+            'query' => ['rule' => $rule, 'selector' => $selector],
+          ]));
+        }
+        $vRows[] = [$rule, $v->get('impact')->value, $selector, $statusCell];
+      }
+    }
+    $build['violations'] = [
+      '#type' => 'table',
+      '#caption' => $this->t('Current violations'),
+      '#header' => [$this->t('Rule'), $this->t('Impact'), $this->t('Selector'), $this->t('Status')],
+      '#rows' => $vRows,
+      '#empty' => $this->t('No violations in the latest scan.'),
     ];
     $build['history'] = [
       '#type' => 'table',

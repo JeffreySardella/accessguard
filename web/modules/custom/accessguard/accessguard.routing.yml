@@ -27,6 +27,19 @@ accessguard.node_detail:
       node:
         type: 'entity:node'
 
+accessguard.waive:
+  path: '/admin/reports/accessguard/node/{node}/waive'
+  defaults:
+    _form: 'Drupal\accessguard\Form\WaiveForm'
+    _title: 'Waive violation'
+  requirements:
+    _permission: 'triage accessguard violations'
+    node: \d+
+  options:
+    parameters:
+      node:
+        type: 'entity:node'
+
 accessguard.settings_form:
   path: '/admin/config/system/accessguard'
   defaults:

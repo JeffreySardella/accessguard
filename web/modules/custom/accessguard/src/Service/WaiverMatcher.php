@@ -39,4 +39,19 @@ class WaiverMatcher {
     return $map;
   }
 
+  /**
+   * Records a waiver for a violation on a node.
+   */
+  public function createWaiver(int $nid, string $ruleId, string $selector, string $status, string $reason, ?int $reviewerUid): void {
+    $this->entityTypeManager->getStorage('accessguard_waiver')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $nid,
+      'rule_id' => $ruleId,
+      'selector' => $selector,
+      'status' => in_array($status, ['accepted_risk', 'false_positive'], TRUE) ? $status : 'accepted_risk',
+      'reason' => $reason,
+      'reviewer' => $reviewerUid,
+    ])->save();
+  }
+
 }
