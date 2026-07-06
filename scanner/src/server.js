@@ -1,4 +1,5 @@
 import express from 'express';
+import { timingSafeEqual, createHash } from 'node:crypto';
 import { runScan } from './scan.js';
 import { assertUrlAllowed } from './urlGuard.js';
 
@@ -7,7 +8,23 @@ app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// Optional shared-secret auth: when SCANNER_AUTH_TOKEN is set, /scan requires
+// a matching X-Scanner-Token header. Hashing both sides makes the comparison
+// timing-safe regardless of length. Unset (the default) keeps the service
+// open for setups that rely purely on network isolation.
+function isAuthorized(req) {
+  const token = process.env.SCANNER_AUTH_TOKEN || '';
+  if (!token) return true;
+  const presented = String(req.headers['x-scanner-token'] || '');
+  const a = createHash('sha256').update(presented).digest();
+  const b = createHash('sha256').update(token).digest();
+  return timingSafeEqual(a, b);
+}
+
 app.post('/scan', async (req, res) => {
+  if (!isAuthorized(req)) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
   const { url } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'Missing required "url" string.' });

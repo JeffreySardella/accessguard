@@ -75,6 +75,50 @@ class CronRescanTest extends KernelTestBase {
   }
 
   /**
+   * Tests that cron does not re-enqueue a node awaiting a queued scan.
+   */
+  public function testCronDoesNotReenqueueWhileScanPending(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'stale', 'status' => 1]);
+    $node->save();
+    $queue = \Drupal::queue('accessguard_scan_queue');
+    $before = $queue->numberOfItems();
+
+    accessguard_cron();
+    $this->assertSame(1, $queue->numberOfItems() - $before);
+
+    // A second cron run before the queued scan is processed must not pile up
+    // duplicate items for the same node.
+    accessguard_cron();
+    $this->assertSame(1, $queue->numberOfItems() - $before);
+  }
+
+  /**
+   * Tests that an expired pending marker lets cron re-enqueue the node.
+   *
+   * If a queued item is lost (e.g. the queue is wiped), the node must not be
+   * skipped forever: once the marker is older than the re-scan interval, cron
+   * tries again.
+   */
+  public function testCronRetriesWhenPendingMarkerExpires(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'stale', 'status' => 1]);
+    $node->save();
+    $queue = \Drupal::queue('accessguard_scan_queue');
+    $before = $queue->numberOfItems();
+
+    accessguard_cron();
+    $this->assertSame(1, $queue->numberOfItems() - $before);
+
+    // Age the marker past the re-scan interval, as if the enqueue happened
+    // long ago but no scan ever completed.
+    $enqueued = \Drupal::state()->get('accessguard.cron_enqueued', []);
+    $enqueued[(int) $node->id()] = \Drupal::time()->getRequestTime() - 999999;
+    \Drupal::state()->set('accessguard.cron_enqueued', $enqueued);
+
+    accessguard_cron();
+    $this->assertSame(2, $queue->numberOfItems() - $before);
+  }
+
+  /**
    * Tests that cron-enqueued items carry the 'cron' trigger in their payload.
    */
   public function testCronEnqueuesWithCronTrigger(): void {

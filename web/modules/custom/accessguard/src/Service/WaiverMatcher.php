@@ -13,9 +13,13 @@ class WaiverMatcher {
 
   /**
    * The fingerprint that ties a waiver to a violation across scans.
+   *
+   * JSON-encoded so a delimiter character appearing inside the selector
+   * (e.g. attribute selectors like [xml|lang]) can never make two different
+   * rule+selector pairs collide.
    */
   public static function fingerprint(string $ruleId, string $selector): string {
-    return $ruleId . '|' . $selector;
+    return json_encode([$ruleId, $selector]);
   }
 
   /**

@@ -45,6 +45,20 @@ class WaiverTest extends KernelTestBase {
   }
 
   /**
+   * Tests that the fingerprint encoding cannot collide across pairs.
+   *
+   * A selector may itself contain the "|" character (e.g. attribute selectors
+   * like [xml|lang]), so a naive rule|selector join could map two different
+   * violations to the same fingerprint.
+   */
+  public function testFingerprintCannotCollideAcrossPairs(): void {
+    $this->assertNotSame(
+      WaiverMatcher::fingerprint('a', 'b|c'),
+      WaiverMatcher::fingerprint('a|b', 'c')
+    );
+  }
+
+  /**
    * Tests that waiving the same fingerprint twice keeps a single waiver.
    */
   public function testDuplicateWaiverIsNotCreated(): void {

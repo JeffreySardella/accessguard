@@ -62,7 +62,7 @@ Because scans are retained, regression tracking (new / fixed / persisting) is a 
 
 ## Security model
 
-The scanner loads URLs in a real browser, an SSRF surface. It allows only `http`/`https` and blocks private, loopback, link-local, CGNAT, and reserved IP ranges by post-resolution IP check (defeating hex/octal encodings). Scanning internal hosts requires an explicit `SCANNER_ALLOW_PRIVATE` opt-in — secure by default. The CSV export neutralizes formula injection. Known limitation: the resolved IP is not pinned into Puppeteer, so redirect-based and DNS-rebinding vectors are not fully closed (roadmap).
+The scanner loads URLs in a real browser, an SSRF surface. It allows only `http`/`https` and blocks private, loopback, link-local, CGNAT, and reserved IP ranges by post-resolution IP check (defeating hex/octal encodings). Scanning internal hosts requires an explicit `SCANNER_ALLOW_PRIVATE` opt-in — secure by default. Every request the page makes (navigation, redirects, subresources) is intercepted: its hostname is resolved and validated once, then the request is fulfilled by a Node-side fetch that connects to that exact vetted IP (`pinnedFetch.js`, with SNI/certificate checks intact for https), so Chromium never re-resolves a name and DNS rebinding has no window on any request. Redirects are returned to the browser un-followed, so each hop is re-validated and re-pinned. The `/scan` endpoint can additionally require a shared-secret `X-Scanner-Token` header by setting `SCANNER_AUTH_TOKEN` (configure the matching token in the AccessGuard settings form). The CSV export neutralizes formula injection, and the report/triage routes enforce node-level view access.
 
 ## Testing
 

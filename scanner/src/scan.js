@@ -1,7 +1,8 @@
 import puppeteer from 'puppeteer';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { assertUrlAllowed, resolveAndAssert } from './urlGuard.js';
+import { resolveAndAssert } from './urlGuard.js';
+import { fetchPinned } from './pinnedFetch.js';
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve('axe-core');
@@ -38,18 +39,39 @@ export async function runScan(url) {
 
     // Guard every request the page makes (the top-level navigation, any
     // redirects it follows, and every subresource) against the SSRF policy —
-    // not just the URL we were handed. Local schemes (file:, data:, about:,
-    // blob:) are not network SSRF vectors and pass through.
+    // not just the URL we were handed. Each hostname is resolved and
+    // validated exactly once per scan, and the request is then fulfilled by
+    // fetchPinned() connecting to that vetted IP — Chromium never re-resolves
+    // the name, so a DNS-rebinding answer after validation has nothing to
+    // swap. Local schemes (file:, data:, about:, blob:) are not network SSRF
+    // vectors and pass through.
+    const pinnedIps = new Map();
     await page.setRequestInterception(true);
-    page.on('request', (req) => {
+    page.on('request', async (req) => {
       const reqUrl = req.url();
       if (!/^https?:/i.test(reqUrl)) {
         req.continue();
         return;
       }
-      assertUrlAllowed(reqUrl)
-        .then(() => req.continue())
-        .catch(() => req.abort('blockedbyclient'));
+      try {
+        const { hostname } = new URL(reqUrl);
+        let ip = pinnedIps.get(hostname);
+        if (!ip) {
+          ({ ip } = await resolveAndAssert(reqUrl));
+          if (!ip) {
+            throw new Error('unresolved_host');
+          }
+          pinnedIps.set(hostname, ip);
+        }
+        const res = await fetchPinned(reqUrl, ip, {
+          method: req.method(),
+          headers: req.headers(),
+          body: req.postData(),
+        });
+        await req.respond({ status: res.status, headers: res.headers, body: res.body });
+      } catch {
+        await req.abort('blockedbyclient').catch(() => {});
+      }
     });
 
     const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });

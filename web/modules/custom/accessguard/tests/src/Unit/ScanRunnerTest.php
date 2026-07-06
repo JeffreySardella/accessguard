@@ -7,6 +7,7 @@ use Drupal\Tests\UnitTestCase;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 
 /**
@@ -41,6 +42,41 @@ class ScanRunnerTest extends UnitTestCase {
     $runner = new ScanRunner($client, $config);
     $result = $runner->scan('http://x/node/1');
     $this->assertSame('image-alt', $result['violations'][0]['ruleId']);
+  }
+
+  /**
+   * Tests that a configured auth token is sent as a request header.
+   */
+  public function testAuthTokenHeaderSentWhenConfigured(): void {
+    $transactions = [];
+    $mock = new MockHandler([new Response(200, [], json_encode(['url' => 'x', 'violations' => []]))]);
+    $stack = HandlerStack::create($mock);
+    $stack->push(Middleware::history($transactions));
+    $client = new Client(['handler' => $stack]);
+    $config = $this->getConfigFactoryStub([
+      'accessguard.settings' => [
+        'scanner_endpoint' => 'http://scanner:3000',
+        'scanner_auth_token' => 'sekret',
+      ],
+    ]);
+    (new ScanRunner($client, $config))->scan('http://x/node/1');
+    $this->assertSame('sekret', $transactions[0]['request']->getHeaderLine('X-Scanner-Token'));
+  }
+
+  /**
+   * Tests that no auth header is sent when no token is configured.
+   */
+  public function testNoAuthHeaderWhenTokenNotConfigured(): void {
+    $transactions = [];
+    $mock = new MockHandler([new Response(200, [], json_encode(['url' => 'x', 'violations' => []]))]);
+    $stack = HandlerStack::create($mock);
+    $stack->push(Middleware::history($transactions));
+    $client = new Client(['handler' => $stack]);
+    $config = $this->getConfigFactoryStub([
+      'accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000'],
+    ]);
+    (new ScanRunner($client, $config))->scan('http://x/node/1');
+    $this->assertFalse($transactions[0]['request']->hasHeader('X-Scanner-Token'));
   }
 
   /**

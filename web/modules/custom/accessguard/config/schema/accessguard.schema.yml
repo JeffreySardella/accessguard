@@ -5,6 +5,9 @@ accessguard.settings:
     scanner_endpoint:
       type: string
       label: 'Scanner service endpoint'
+    scanner_auth_token:
+      type: string
+      label: 'Scanner service shared-secret token'
     gate_enabled:
       type: boolean
       label: 'Enable publish gating'

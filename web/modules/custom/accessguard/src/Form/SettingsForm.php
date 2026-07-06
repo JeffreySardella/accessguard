@@ -37,6 +37,12 @@ class SettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('scanner_endpoint'),
       '#required' => TRUE,
     ];
+    $form['scanner_auth_token'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Scanner auth token'),
+      '#description' => $this->t('Shared secret sent as the X-Scanner-Token header. Must match the SCANNER_AUTH_TOKEN environment variable on the scanner service. Leave empty if the scanner does not require a token.'),
+      '#default_value' => $config->get('scanner_auth_token'),
+    ];
     $form['gate_enabled'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable publish gating'),
@@ -80,6 +86,7 @@ class SettingsForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $this->config('accessguard.settings')
       ->set('scanner_endpoint', $form_state->getValue('scanner_endpoint'))
+      ->set('scanner_auth_token', (string) $form_state->getValue('scanner_auth_token'))
       ->set('gate_enabled', (bool) $form_state->getValue('gate_enabled'))
       ->set('gate_threshold', $form_state->getValue('gate_threshold'))
       ->set('rescan_enabled', (bool) $form_state->getValue('rescan_enabled'))

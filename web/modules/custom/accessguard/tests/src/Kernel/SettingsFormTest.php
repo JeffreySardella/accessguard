@@ -35,6 +35,7 @@ class SettingsFormTest extends KernelTestBase {
     $form_state = new FormState();
     $form_state->setValues([
       'scanner_endpoint' => 'http://custom-scanner:3000',
+      'scanner_auth_token' => 'sekret',
       // Drupal\Core\Render\Element\Checkbox::valueCallback() treats a raw
       // boolean FALSE as its internal "no input" sentinel (falling back to
       // #default_value, which is TRUE here). NULL is the correct
@@ -49,6 +50,7 @@ class SettingsFormTest extends KernelTestBase {
 
     $config = $this->config('accessguard.settings');
     $this->assertSame('http://custom-scanner:3000', $config->get('scanner_endpoint'));
+    $this->assertSame('sekret', $config->get('scanner_auth_token'));
     $this->assertFalse($config->get('gate_enabled'));
     $this->assertSame('serious', $config->get('gate_threshold'));
     $this->assertSame(3600, $config->get('rescan_interval'));

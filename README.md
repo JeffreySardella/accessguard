@@ -61,7 +61,7 @@ See `benchmark/RESULTS.md` for an empirical detection comparison on the demo fix
 
 ## Security
 
-The scanner loads arbitrary URLs in a real browser, a classic SSRF risk. By default it **only** allows `http`/`https` and **blocks** private, loopback, link-local, CGNAT, and reserved IP ranges. Scanning internal/private hosts (like your own Drupal site on a private network) requires explicitly opting in via `SCANNER_ALLOW_PRIVATE=1` — secure by default, explicit override for trusted networks. The guard runs on **every** request the page makes (the navigation, any redirects, and subresources) via request interception, and the validated IP is **pinned into Chromium** (`--host-resolver-rules`) so a DNS-rebinding attack can't swap the target between validation and connection.
+The scanner loads arbitrary URLs in a real browser, a classic SSRF risk. By default it **only** allows `http`/`https` and **blocks** private, loopback, link-local, CGNAT, and reserved IP ranges. Scanning internal/private hosts (like your own Drupal site on a private network) requires explicitly opting in via `SCANNER_ALLOW_PRIVATE=1` — secure by default, explicit override for trusted networks. The guard runs on **every** request the page makes (the navigation, any redirects, and subresources) via request interception, and each request is fulfilled over a connection **pinned to the exact IP that was validated** (DNS is consulted once, by the guard), so a DNS-rebinding attack can't swap the target between validation and connection — on any request, not just the first. The scan endpoint can also require a shared-secret token (`SCANNER_AUTH_TOKEN` on the service, matching token in the settings form) so only your Drupal site can drive it.
 
 ## Quick start
 

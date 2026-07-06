@@ -113,15 +113,33 @@ function accessguard_cron() {
   // Latest scan timestamp per node (aggregate query, no entity hydration).
   $latest = \Drupal::service('accessguard.scan_repository')->latestScanCreatedByNode();
 
+  // Timestamps of items cron already enqueued, so frequent cron runs don't
+  // pile up duplicate queue items for the same stale node while its scan is
+  // still waiting in the queue. A marker expires after one interval, so a
+  // lost queue item can't shelve a node forever.
+  $state = \Drupal::state();
+  $pending = $state->get('accessguard.cron_enqueued', []);
+  // Drop markers for nodes that are gone or unpublished.
+  $pending = array_intersect_key($pending, array_flip($nids));
+
   $queue = \Drupal::queue('accessguard_scan_queue');
+  $now = \Drupal::time()->getRequestTime();
   $enqueued = 0;
   foreach ($nids as $nid) {
     $last = $latest[$nid] ?? 0;
-    if ($last < $cutoff) {
-      $queue->createItem(['nid' => (int) $nid, 'trigger' => 'cron']);
-      if (++$enqueued >= $batch) {
-        break;
-      }
+    if ($last >= $cutoff) {
+      continue;
+    }
+    $marker = $pending[$nid] ?? 0;
+    if ($marker > $last && $marker >= $cutoff) {
+      // Already enqueued since its last completed scan, within the interval.
+      continue;
+    }
+    $queue->createItem(['nid' => (int) $nid, 'trigger' => 'cron']);
+    $pending[$nid] = $now;
+    if (++$enqueued >= $batch) {
+      break;
     }
   }
+  $state->set('accessguard.cron_enqueued', $pending);
 }

@@ -22,12 +22,18 @@ class ScanRunner {
    *   On transport or decode failure.
    */
   public function scan(string $url): array {
-    $endpoint = rtrim((string) $this->configFactory->get('accessguard.settings')->get('scanner_endpoint'), '/');
+    $config = $this->configFactory->get('accessguard.settings');
+    $endpoint = rtrim((string) $config->get('scanner_endpoint'), '/');
+    $options = [
+      'json' => ['url' => $url],
+      'timeout' => 60,
+    ];
+    $token = (string) ($config->get('scanner_auth_token') ?? '');
+    if ($token !== '') {
+      $options['headers'] = ['X-Scanner-Token' => $token];
+    }
     try {
-      $response = $this->httpClient->request('POST', $endpoint . '/scan', [
-        'json' => ['url' => $url],
-        'timeout' => 60,
-      ]);
+      $response = $this->httpClient->request('POST', $endpoint . '/scan', $options);
       $data = json_decode((string) $response->getBody(), TRUE, 512, JSON_THROW_ON_ERROR);
     }
     catch (\Throwable $e) {
