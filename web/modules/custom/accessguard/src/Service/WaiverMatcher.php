@@ -41,8 +41,14 @@ class WaiverMatcher {
 
   /**
    * Records a waiver for a violation on a node.
+   *
+   * A fingerprint that is already waived on the node is left untouched, so
+   * repeated submissions cannot pile up duplicate waivers.
    */
   public function createWaiver(int $nid, string $ruleId, string $selector, string $status, string $reason, ?int $reviewerUid): void {
+    if (isset($this->waivedFingerprints($nid)[self::fingerprint($ruleId, $selector)])) {
+      return;
+    }
     $this->entityTypeManager->getStorage('accessguard_waiver')->create([
       'target_entity_type' => 'node',
       'target_entity_id' => $nid,
@@ -52,6 +58,23 @@ class WaiverMatcher {
       'reason' => $reason,
       'reviewer' => $reviewerUid,
     ])->save();
+  }
+
+  /**
+   * Deletes the waivers matching a rule+selector fingerprint on a node.
+   */
+  public function deleteWaivers(int $nid, string $ruleId, string $selector): void {
+    $storage = $this->entityTypeManager->getStorage('accessguard_waiver');
+    $ids = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('target_entity_type', 'node')
+      ->condition('target_entity_id', $nid)
+      ->condition('rule_id', $ruleId)
+      ->condition('selector', $selector)
+      ->execute();
+    if ($ids) {
+      $storage->delete($storage->loadMultiple($ids));
+    }
   }
 
 }

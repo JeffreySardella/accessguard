@@ -59,12 +59,17 @@ class DashboardController extends ControllerBase {
     $totals = ['critical' => 0, 'serious' => 0, 'moderate' => 0, 'minor' => 0];
     $rows = [];
     foreach ($latest as $nid => $scan) {
+      $node = $nodeStorage->load($nid);
+      // Node-level access applies to the report too: don't leak titles or
+      // violation counts of content the viewer cannot see.
+      if (!$node || !$node->access('view')) {
+        continue;
+      }
       foreach ($totals as $sev => $_) {
         $totals[$sev] += (int) $scan->get('count_' . $sev)->value;
       }
-      $node = $nodeStorage->load($nid);
       $rows[] = [
-        $node ? Link::fromTextAndUrl($node->label(), Url::fromRoute('accessguard.node_detail', ['node' => $nid])) : $this->t('Node @id', ['@id' => $nid]),
+        Link::fromTextAndUrl($node->label(), Url::fromRoute('accessguard.node_detail', ['node' => $nid])),
         $this->dateFormatter->format((int) $scan->get('created')->value, 'short'),
         (int) $scan->get('count_critical')->value,
         (int) $scan->get('count_serious')->value,
@@ -80,7 +85,7 @@ class DashboardController extends ControllerBase {
       '#theme' => 'item_list',
       '#title' => $this->t('Compliance summary'),
       '#items' => [
-        $this->t('Pages scanned: @n', ['@n' => count($latest)]),
+        $this->t('Pages scanned: @n', ['@n' => count($rows)]),
         $this->t('Total violations (latest scans): @n', ['@n' => $totalViolations]),
         $this->t('Critical: @c, Serious: @s, Moderate: @m, Minor: @mi', [
           '@c' => $totals['critical'],
@@ -134,8 +139,12 @@ class DashboardController extends ControllerBase {
     $rows[] = ['Page', 'Node ID', 'URL', 'Scan date', 'Rule', 'Impact', 'WCAG', 'Selector', 'Status'];
     foreach ($latest as $nid => $scan) {
       $node = $nodeStorage->load($nid);
+      // The audit export honors node-level access like the overview does.
+      if (!$node || !$node->access('view')) {
+        continue;
+      }
       $waivedByNode = $this->waiverMatcher->waivedFingerprints($nid);
-      $title = $node ? $node->label() : ('Node ' . $nid);
+      $title = $node->label();
       $date = $this->dateFormatter->format((int) $scan->get('created')->value, 'short');
       $url = $scan->get('url')->value;
       $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
@@ -229,6 +238,7 @@ class DashboardController extends ControllerBase {
     ];
     $latestScanId = $diff['latest_scan'] ?? NULL;
     $waived = $this->waiverMatcher->waivedFingerprints($nid);
+    $canTriage = $this->currentUser()->hasPermission('triage accessguard violations');
     $vRows = [];
     if ($latestScanId) {
       $violations = $this->entityTypeManagerService->getStorage('accessguard_violation')
@@ -238,12 +248,29 @@ class DashboardController extends ControllerBase {
         $selector = (string) $v->get('selector')->value;
         $fp = WaiverMatcher::fingerprint($rule, $selector);
         if (isset($waived[$fp])) {
-          $statusCell = $this->t('Waived (@s)', ['@s' => str_replace('_', ' ', $waived[$fp])]);
+          $label = $this->t('Waived (@s)', ['@s' => str_replace('_', ' ', $waived[$fp])]);
+          $statusCell = $canTriage
+            ? [
+              'data' => [
+                'status' => ['#plain_text' => $label],
+                'unwaive' => [
+                  '#type' => 'link',
+                  '#title' => $this->t('Un-waive'),
+                  '#url' => Url::fromRoute('accessguard.unwaive', ['node' => $nid], [
+                    'query' => ['rule' => $rule, 'selector' => $selector],
+                  ]),
+                  '#prefix' => ' — ',
+                ],
+              ],
+            ]
+            : $label;
         }
         else {
-          $statusCell = Link::fromTextAndUrl($this->t('Waive'), Url::fromRoute('accessguard.waive', ['node' => $nid], [
-            'query' => ['rule' => $rule, 'selector' => $selector],
-          ]));
+          $statusCell = $canTriage
+            ? Link::fromTextAndUrl($this->t('Waive'), Url::fromRoute('accessguard.waive', ['node' => $nid], [
+              'query' => ['rule' => $rule, 'selector' => $selector],
+            ]))
+            : $this->t('Open');
         }
         $vRows[] = [$rule, $v->get('impact')->value, $selector, $statusCell];
       }

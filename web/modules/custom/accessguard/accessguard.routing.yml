@@ -21,6 +21,7 @@ accessguard.node_detail:
     _title: 'AccessGuard: page detail'
   requirements:
     _permission: 'view accessguard reports'
+    _entity_access: 'node.view'
     node: \d+
   options:
     parameters:
@@ -34,6 +35,21 @@ accessguard.waive:
     _title: 'Waive violation'
   requirements:
     _permission: 'triage accessguard violations'
+    _entity_access: 'node.view'
+    node: \d+
+  options:
+    parameters:
+      node:
+        type: 'entity:node'
+
+accessguard.unwaive:
+  path: '/admin/reports/accessguard/node/{node}/unwaive'
+  defaults:
+    _form: 'Drupal\accessguard\Form\UnwaiveForm'
+    _title: 'Remove waiver'
+  requirements:
+    _permission: 'triage accessguard violations'
+    _entity_access: 'node.view'
     node: \d+
   options:
     parameters:

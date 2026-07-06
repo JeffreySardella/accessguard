@@ -49,10 +49,22 @@ function _accessguard_enqueue_if_published(NodeInterface $node) {
 /**
  * Implements hook_ENTITY_TYPE_delete() for nodes.
  *
- * Removes the scans and violations belonging to a deleted node.
+ * Removes the scans, violations, and waivers belonging to a deleted node.
  */
 function accessguard_node_delete(NodeInterface $node) {
   $etm = \Drupal::entityTypeManager();
+  // Waivers reference the node directly (not a scan), so clean them up even
+  // when the node was never scanned. A leftover waiver on a reused node id
+  // would silently suppress violations on unrelated content.
+  $waiverStorage = $etm->getStorage('accessguard_waiver');
+  $waiverIds = $waiverStorage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('target_entity_type', 'node')
+    ->condition('target_entity_id', $node->id())
+    ->execute();
+  if ($waiverIds) {
+    $waiverStorage->delete($waiverStorage->loadMultiple($waiverIds));
+  }
   $scanStorage = $etm->getStorage('accessguard_scan');
   $scanIds = $scanStorage->getQuery()
     ->accessCheck(FALSE)

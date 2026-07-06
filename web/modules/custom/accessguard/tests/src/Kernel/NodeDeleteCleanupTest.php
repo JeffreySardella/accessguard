@@ -27,6 +27,7 @@ class NodeDeleteCleanupTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
     $this->installEntitySchema('accessguard_violation');
+    $this->installEntitySchema('accessguard_waiver');
     $this->installEntitySchema('node');
     $this->installEntitySchema('user');
     $this->installSchema('node', ['node_access']);
@@ -58,6 +59,22 @@ class NodeDeleteCleanupTest extends KernelTestBase {
     $violations = \Drupal::entityTypeManager()->getStorage('accessguard_violation')->loadMultiple();
     $this->assertCount(0, $scans);
     $this->assertCount(0, $violations);
+  }
+
+  /**
+   * Tests that deleting a node removes its waivers, even without scans.
+   */
+  public function testDeletingNodeRemovesItsWaivers(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'x', 'status' => 1]);
+    $node->save();
+    // No scan on purpose: waiver cleanup must not depend on scans existing.
+    \Drupal::service('accessguard.waiver_matcher')
+      ->createWaiver((int) $node->id(), 'image-alt', 'img', 'false_positive', 'decorative', 1);
+
+    $node->delete();
+
+    $waivers = \Drupal::entityTypeManager()->getStorage('accessguard_waiver')->loadMultiple();
+    $this->assertCount(0, $waivers);
   }
 
 }
