@@ -26,6 +26,17 @@ class ScanRepository {
   }
 
   /**
+   * Latest scan entity id for one node (latest = highest scan id).
+   */
+  public function latestScanIdForNode(int $nid): ?int {
+    $id = $this->database->query(
+      'SELECT MAX(id) FROM {accessguard_scan} WHERE target_entity_type = :type AND target_entity_id = :nid',
+      [':type' => 'node', ':nid' => $nid]
+    )->fetchField();
+    return $id ? (int) $id : NULL;
+  }
+
+  /**
    * Latest scan timestamp per node, without loading any entity.
    *
    * @return array<int, int>

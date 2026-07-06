@@ -191,24 +191,27 @@ class DashboardController extends ControllerBase {
     $scanStorage = $this->entityTypeManagerService->getStorage('accessguard_scan');
     $userStorage = $this->entityTypeManagerService->getStorage('user');
 
+    // Author attribution comes from the latest scan, looked up on its own so
+    // it stays correct on any page of the (paginated) history below.
+    $author = $this->t('Unknown');
+    $latestId = $this->scanRepository->latestScanIdForNode($nid);
+    if ($latestId && ($latest = $scanStorage->load($latestId))) {
+      $uid = $latest->get('content_author')->target_id;
+      if ($uid && ($u = $userStorage->load($uid))) {
+        $author = $u->getDisplayName();
+      }
+    }
+
     $ids = $scanStorage->getQuery()
       ->accessCheck(FALSE)
       ->condition('target_entity_type', 'node')
       ->condition('target_entity_id', $nid)
       ->sort('created', 'DESC')
+      ->pager(25)
       ->execute();
 
-    $author = $this->t('Unknown');
     $historyRows = [];
-    $first = TRUE;
     foreach ($scanStorage->loadMultiple($ids) as $scan) {
-      if ($first) {
-        $uid = $scan->get('content_author')->target_id;
-        if ($uid && ($u = $userStorage->load($uid))) {
-          $author = $u->getDisplayName();
-        }
-        $first = FALSE;
-      }
       $historyRows[] = [
         $this->dateFormatter->format((int) $scan->get('created')->value, 'short'),
         (int) $scan->get('count_critical')->value,
@@ -280,7 +283,9 @@ class DashboardController extends ControllerBase {
       '#caption' => $this->t('Current violations'),
       '#header' => [$this->t('Rule'), $this->t('Impact'), $this->t('Selector'), $this->t('Status')],
       '#rows' => $vRows,
-      '#empty' => $this->t('No violations in the latest scan.'),
+      '#empty' => $latestScanId
+        ? $this->t('No violations in the latest scan.')
+        : $this->t('This page has not been scanned yet.'),
     ];
     $build['history'] = [
       '#type' => 'table',
@@ -295,6 +300,7 @@ class DashboardController extends ControllerBase {
       '#rows' => $historyRows,
       '#empty' => $this->t('No scans yet.'),
     ];
+    $build['history_pager'] = ['#type' => 'pager'];
     $build['#cache'] = ['max-age' => 0];
     return $build;
   }

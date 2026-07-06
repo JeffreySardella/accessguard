@@ -2,7 +2,9 @@
 
 namespace Drupal\accessguard\Form;
 
+use Drupal\accessguard\Repository\ScanRepository;
 use Drupal\accessguard\Service\WaiverMatcher;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountProxyInterface;
@@ -20,6 +22,8 @@ class WaiveForm extends FormBase {
     protected WaiverMatcher $waiverMatcher,
     RequestStack $requestStack,
     protected AccountProxyInterface $currentUser,
+    protected EntityTypeManagerInterface $entityTypeManager,
+    protected ScanRepository $scanRepository,
   ) {
     $this->requestStack = $requestStack;
   }
@@ -32,6 +36,8 @@ class WaiveForm extends FormBase {
       $container->get('accessguard.waiver_matcher'),
       $container->get('request_stack'),
       $container->get('current_user'),
+      $container->get('entity_type.manager'),
+      $container->get('accessguard.scan_repository'),
     );
   }
 
@@ -80,6 +86,39 @@ class WaiveForm extends FormBase {
       '#value' => $this->t('Record waiver'),
     ];
     return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * A waiver only makes sense for a violation that actually exists in the
+   * node's latest scan and is not already waived — otherwise a mistyped or
+   * stale URL would silently record a waiver that never matches anything.
+   */
+  public function validateForm(array &$form, FormStateInterface $form_state): void {
+    parent::validateForm($form, $form_state);
+    $nid = (int) $form_state->getValue('node_id');
+    $rule = (string) $form_state->getValue('rule');
+    $selector = (string) $form_state->getValue('selector');
+    $fp = WaiverMatcher::fingerprint($rule, $selector);
+
+    if (isset($this->waiverMatcher->waivedFingerprints($nid)[$fp])) {
+      $form_state->setErrorByName('status', $this->t('This violation is already waived.'));
+      return;
+    }
+
+    $scanId = $this->scanRepository->latestScanIdForNode($nid);
+    $current = [];
+    if ($scanId) {
+      $violations = $this->entityTypeManager->getStorage('accessguard_violation')
+        ->loadByProperties(['scan_id' => $scanId]);
+      foreach ($violations as $v) {
+        $current[WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value)] = TRUE;
+      }
+    }
+    if (!isset($current[$fp])) {
+      $form_state->setErrorByName('status', $this->t("The latest scan has no violation matching this rule and selector, so there is nothing to waive."));
+    }
   }
 
   /**
