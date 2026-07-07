@@ -2,6 +2,7 @@ import express from 'express';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { runScan } from './scan.js';
 import { assertUrlAllowed } from './urlGuard.js';
+import { renderPdf } from './pdf.js';
 
 export const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -40,6 +41,24 @@ app.post('/scan', async (req, res) => {
   } catch (err) {
     console.error('[accessguard-scanner] scan failed:', err);
     res.status(500).json({ error: 'scan_failed' });
+  }
+});
+
+app.post('/pdf', express.json({ limit: '5mb' }), async (req, res) => {
+  if (!isAuthorized(req)) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const { html } = req.body || {};
+  if (!html || typeof html !== 'string') {
+    return res.status(400).json({ error: 'invalid_html' });
+  }
+  try {
+    const pdf = await renderPdf(html);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.send(pdf);
+  } catch (err) {
+    console.error('[accessguard-scanner] pdf failed:', err);
+    res.status(500).json({ error: 'pdf_failed' });
   }
 });
 
