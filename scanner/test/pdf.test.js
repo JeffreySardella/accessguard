@@ -71,3 +71,37 @@ test('POST /pdf renders even when HTML references an unreachable subresource', a
     server.close();
   }
 }, 30000);
+
+test('POST /pdf blocks a remote <iframe> in the supplied HTML but still renders', async () => {
+  const { server, port } = listen();
+  try {
+    const html = '<!doctype html><html><body><h1>Audit</h1>'
+      + '<iframe src="http://example.com/secret"></iframe></body></html>';
+    const res = await fetch(`http://127.0.0.1:${port}/pdf`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    expect(res.status).toBe(200);
+    const buf = Buffer.from(await res.arrayBuffer());
+    expect(buf.subarray(0, 4).toString('latin1')).toBe('%PDF');
+  } finally {
+    server.close();
+  }
+}, 30000);
+
+test('POST /pdf accepts a body larger than the 1mb /scan limit', async () => {
+  const { server, port } = listen();
+  try {
+    const big = '<p>' + 'a'.repeat(1500000) + '</p>';
+    const html = `<!doctype html><html><body><h1>Audit</h1>${big}</body></html>`;
+    const res = await fetch(`http://127.0.0.1:${port}/pdf`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    expect(res.status).toBe(200);
+  } finally {
+    server.close();
+  }
+}, 30000);

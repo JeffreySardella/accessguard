@@ -5,7 +5,13 @@ import { assertUrlAllowed } from './urlGuard.js';
 import { renderPdf } from './pdf.js';
 
 export const app = express();
-app.use(express.json({ limit: '1mb' }));
+// Parse JSON globally at 1mb, EXCEPT /pdf, which needs a larger ceiling for
+// full-report HTML. A single global parser would win regardless of any
+// route-level parser (body-parser marks the body read, and a later parser
+// short-circuits), so /pdf is excluded here and gets its own 5mb parser.
+const jsonSmall = express.json({ limit: '1mb' });
+const jsonPdf = express.json({ limit: '5mb' });
+app.use((req, res, next) => (req.path === '/pdf' ? next() : jsonSmall(req, res, next)));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -44,7 +50,7 @@ app.post('/scan', async (req, res) => {
   }
 });
 
-app.post('/pdf', express.json({ limit: '5mb' }), async (req, res) => {
+app.post('/pdf', jsonPdf, async (req, res) => {
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
