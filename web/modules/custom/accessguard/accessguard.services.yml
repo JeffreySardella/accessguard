@@ -17,3 +17,6 @@ services:
   accessguard.violation_analytics:
     class: Drupal\accessguard\Service\ViolationAnalytics
     arguments: ['@entity_type.manager', '@accessguard.scan_repository', '@accessguard.waiver_matcher', '@current_user']
+  accessguard.report_html_builder:
+    class: Drupal\accessguard\Service\ReportHtmlBuilder
+    arguments: ['@accessguard.violation_analytics', '@accessguard.scan_repository', '@accessguard.waiver_matcher', '@entity_type.manager', '@current_user', '@date.formatter', '@config.factory', '@datetime.time']
