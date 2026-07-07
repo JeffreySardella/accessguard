@@ -90,7 +90,7 @@ You should see all six demo pages, each with the accessibility violation it was 
 
 ## What's built
 
-- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard. 9 tests.
+- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard, plus a PDF-rendering endpoint for audit reports. 22 tests.
 - **`accessguard` module**
   - `accessguard_scan` and `accessguard_violation` entities
   - `ScanRunner` (calls the scanner), `ScanRecorder` (persists results), and `RegressionService` (diffs a node's two latest scans) services
@@ -98,7 +98,8 @@ You should see all six demo pages, each with the accessibility violation it was 
   - **cron site-wide re-scanning** of stale/unscanned published nodes
   - a **compliance dashboard** at `/admin/reports/accessguard`, plus per-node detail pages with scan history, regression diff (new / fixed / persisting), and author attribution
   - **publish-gating**: an entity validation constraint that blocks publishing a node whose latest scan has violations at/above a configured severity threshold (bypassable with a permission)
-  - **CSV audit export** (formula-injection-safe) at `/admin/reports/accessguard/export`
+  - **CSV audit export** (formula-injection-safe) at `/admin/reports/accessguard/export`, plus a formal **PDF audit report** (cover, compliance summary, per-rule / per-author breakdowns, and per-page findings with waiver justifications) rendered by the scanner
+  - **per-rule and per-author analytics** as dashboard tabs (Overview / By rule / By author) — surface which rules cause the most violations site-wide and which authors' content needs attention
   - **violation triage**: waive false-positives / accepted-risks (matched by rule+selector across scans); waived issues stop blocking the gate and are flagged in the audit export
   - a **settings form** at /admin/config/system/accessguard
 - **`accessguard_demo` module** — a content type plus six pages, each seeded with one reliable WCAG violation, for exercising the pipeline.
@@ -122,7 +123,6 @@ A sample exported audit report is at [`docs/sample-audit.csv`](docs/sample-audit
 
 ## Roadmap
 
-- PDF audit export and richer per-rule / per-author analytics.
 - Concurrency-limited browser pooling in the scanner (reuse instances under load).
 
 ## Tech stack
