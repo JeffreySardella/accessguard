@@ -4,7 +4,9 @@ namespace Drupal\accessguard\Controller;
 
 use Drupal\accessguard\Csv\CsvSafe;
 use Drupal\accessguard\Repository\ScanRepository;
+use Drupal\accessguard\Service\PdfClient;
 use Drupal\accessguard\Service\RegressionService;
+use Drupal\accessguard\Service\ReportHtmlBuilder;
 use Drupal\accessguard\Service\WaiverMatcher;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Controller\ControllerBase;
@@ -14,6 +16,7 @@ use Drupal\Core\Link;
 use Drupal\Core\Url;
 use Drupal\node\NodeInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -27,6 +30,8 @@ class DashboardController extends ControllerBase {
     protected ScanRepository $scanRepository,
     protected RegressionService $regressionService,
     protected WaiverMatcher $waiverMatcher,
+    protected ReportHtmlBuilder $reportHtmlBuilder,
+    protected PdfClient $pdfClient,
   ) {}
 
   /**
@@ -39,6 +44,8 @@ class DashboardController extends ControllerBase {
       $container->get('accessguard.scan_repository'),
       $container->get('accessguard.regression'),
       $container->get('accessguard.waiver_matcher'),
+      $container->get('accessguard.report_html_builder'),
+      $container->get('accessguard.pdf_client'),
     );
   }
 
@@ -117,6 +124,13 @@ class DashboardController extends ControllerBase {
       '#attributes' => ['class' => ['button']],
     ];
 
+    $build['export_pdf'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Export audit PDF'),
+      '#url' => Url::fromRoute('accessguard.audit_export_pdf'),
+      '#attributes' => ['class' => ['button']],
+    ];
+
     return $build;
   }
 
@@ -180,6 +194,27 @@ class DashboardController extends ControllerBase {
     $response = new Response($csv);
     $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
     $response->headers->set('Content-Disposition', 'attachment; filename="accessguard-audit.csv"');
+    return $response;
+  }
+
+  /**
+   * Streams a PDF audit report rendered by the scanner.
+   *
+   * The scanner must be running; on failure the user is returned to the
+   * dashboard with an error and the CSV export remains available.
+   */
+  public function exportPdf() {
+    $html = $this->reportHtmlBuilder->build();
+    try {
+      $pdf = $this->pdfClient->render($html);
+    }
+    catch (\Throwable $e) {
+      $this->messenger()->addError($this->t('PDF export requires the scanner service to be running. CSV export is still available.'));
+      return new RedirectResponse(Url::fromRoute('accessguard.dashboard')->toString());
+    }
+    $response = new Response($pdf);
+    $response->headers->set('Content-Type', 'application/pdf');
+    $response->headers->set('Content-Disposition', 'attachment; filename="accessguard-audit-' . date('Y-m-d') . '.pdf"');
     return $response;
   }
 

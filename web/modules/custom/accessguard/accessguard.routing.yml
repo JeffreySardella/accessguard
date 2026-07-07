@@ -79,3 +79,11 @@ accessguard.analytics_authors:
     _title: 'AccessGuard: by author'
   requirements:
     _permission: 'view accessguard reports'
+
+accessguard.audit_export_pdf:
+  path: '/admin/reports/accessguard/export/pdf'
+  defaults:
+    _controller: 'Drupal\accessguard\Controller\DashboardController::exportPdf'
+    _title: 'Export AccessGuard PDF'
+  requirements:
+    _permission: 'view accessguard reports'
