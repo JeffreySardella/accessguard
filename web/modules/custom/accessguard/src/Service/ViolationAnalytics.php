@@ -15,6 +15,13 @@ use Drupal\Core\Session\AccountProxyInterface;
  */
 class ViolationAnalytics {
 
+  /**
+   * Memoized per-node context, built on first call to accessibleScans().
+   *
+   * @var array<int, array{nid:int, author_uid:?int, violations:array, waived:array<string,string>}>|null
+   */
+  protected ?array $scanContextCache = NULL;
+
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
     protected ScanRepository $scanRepository,
@@ -138,14 +145,29 @@ class ViolationAnalytics {
   /**
    * Yields per-node context for the latest scan of each accessible node.
    *
+   * Builds the context array at most once per request and memoizes it on
+   * $scanContextCache, since the underlying node/violation/waiver lookups
+   * are identical on every call within the same request.
+   *
    * @return \Generator<array{nid:int, author_uid:?int, violations:array, waived:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   protected function accessibleScans(): \Generator {
+    yield from $this->scanContextCache ??= $this->buildScanContext();
+  }
+
+  /**
+   * Builds the per-node context for each latest scan the current user may view.
+   *
+   * @return array<int, array{nid:int, author_uid:?int, violations:array, waived:array<string,string>}>
+   *   Per-node context for each latest scan the current user may view.
+   */
+  protected function buildScanContext(): array {
     $scanStorage = $this->entityTypeManager->getStorage('accessguard_scan');
     $violationStorage = $this->entityTypeManager->getStorage('accessguard_violation');
     $nodeStorage = $this->entityTypeManager->getStorage('node');
 
+    $context = [];
     $latestIds = $this->scanRepository->latestScanIdByNode();
     $scans = $scanStorage->loadMultiple(array_values($latestIds));
     foreach ($scans as $scan) {
@@ -155,13 +177,14 @@ class ViolationAnalytics {
         continue;
       }
       $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
-      yield [
+      $context[] = [
         'nid' => $nid,
         'author_uid' => $scan->get('content_author')->target_id ? (int) $scan->get('content_author')->target_id : NULL,
         'violations' => $violations,
         'waived' => $this->waiverMatcher->waivedFingerprints($nid),
       ];
     }
+    return $context;
   }
 
 }
