@@ -2,6 +2,9 @@ services:
   accessguard.scan_runner:
     class: Drupal\accessguard\Service\ScanRunner
     arguments: ['@http_client', '@config.factory']
+  accessguard.pdf_client:
+    class: Drupal\accessguard\Service\PdfClient
+    arguments: ['@http_client', '@config.factory']
   accessguard.scan_recorder:
     class: Drupal\accessguard\Service\ScanRecorder
     arguments: ['@entity_type.manager', '@database']
