@@ -72,11 +72,15 @@ test('POST /pdf renders even when HTML references an unreachable subresource', a
   }
 }, 30000);
 
-test('POST /pdf blocks a remote <iframe> in the supplied HTML but still renders', async () => {
+test('POST /pdf does not let a remote <iframe> reach the network', async () => {
+  let hit = false;
+  const canary = http.createServer((req, res) => { hit = true; res.end('x'); });
+  await new Promise((r) => canary.listen(0, '127.0.0.1', r));
+  const canaryPort = canary.address().port;
   const { server, port } = listen();
   try {
     const html = '<!doctype html><html><body><h1>Audit</h1>'
-      + '<iframe src="http://example.com/secret"></iframe></body></html>';
+      + `<iframe src="http://127.0.0.1:${canaryPort}/secret"></iframe></body></html>`;
     const res = await fetch(`http://127.0.0.1:${port}/pdf`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -85,8 +89,12 @@ test('POST /pdf blocks a remote <iframe> in the supplied HTML but still renders'
     expect(res.status).toBe(200);
     const buf = Buffer.from(await res.arrayBuffer());
     expect(buf.subarray(0, 4).toString('latin1')).toBe('%PDF');
+    // The iframe's request must have been aborted by the interception layer;
+    // if it had reached the network, the canary would have recorded a hit.
+    expect(hit).toBe(false);
   } finally {
     server.close();
+    canary.close();
   }
 }, 30000);
 
