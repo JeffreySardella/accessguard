@@ -1,0 +1,14 @@
+accessguard.overview_tab:
+  title: 'Overview'
+  route_name: accessguard.dashboard
+  base_route: accessguard.dashboard
+
+accessguard.rules_tab:
+  title: 'By rule'
+  route_name: accessguard.analytics_rules
+  base_route: accessguard.dashboard
+
+accessguard.authors_tab:
+  title: 'By author'
+  route_name: accessguard.analytics_authors
+  base_route: accessguard.dashboard

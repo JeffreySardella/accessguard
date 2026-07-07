@@ -63,3 +63,19 @@ accessguard.settings_form:
     _title: 'AccessGuard settings'
   requirements:
     _permission: 'administer accessguard'
+
+accessguard.analytics_rules:
+  path: '/admin/reports/accessguard/rules'
+  defaults:
+    _controller: 'Drupal\accessguard\Controller\AnalyticsController::byRule'
+    _title: 'AccessGuard: by rule'
+  requirements:
+    _permission: 'view accessguard reports'
+
+accessguard.analytics_authors:
+  path: '/admin/reports/accessguard/authors'
+  defaults:
+    _controller: 'Drupal\accessguard\Controller\AnalyticsController::byAuthor'
+    _title: 'AccessGuard: by author'
+  requirements:
+    _permission: 'view accessguard reports'
