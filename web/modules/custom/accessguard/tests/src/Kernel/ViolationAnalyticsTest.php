@@ -82,10 +82,10 @@ class ViolationAnalyticsTest extends KernelTestBase {
     $b->save();
     $scanA = $this->makeScan((int) $a->id());
     $scanB = $this->makeScan((int) $b->id());
-    // image-alt appears on both pages; on B it is waived.
+    // The image-alt rule appears on both pages; on B it is waived.
     $this->addViolation($scanA, 'image-alt', 'critical', 'img');
     $this->addViolation($scanB, 'image-alt', 'critical', 'img');
-    // label appears once, open.
+    // The label rule appears once and stays open.
     $this->addViolation($scanA, 'label', 'serious', 'input');
     \Drupal::service('accessguard.waiver_matcher')
       ->createWaiver((int) $b->id(), 'image-alt', 'img', 'false_positive', 'decorative', 1);
