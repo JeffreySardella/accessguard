@@ -3,13 +3,17 @@
 namespace Drupal\accessguard\Service;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Lock\LockBackendInterface;
 
 /**
  * Looks up active waivers for a node, keyed by rule+selector fingerprint.
  */
 class WaiverMatcher {
 
-  public function __construct(protected EntityTypeManagerInterface $entityTypeManager) {}
+  public function __construct(
+    protected EntityTypeManagerInterface $entityTypeManager,
+    protected LockBackendInterface $lock,
+  ) {}
 
   /**
    * The fingerprint that ties a waiver to a violation across scans.
@@ -74,18 +78,32 @@ class WaiverMatcher {
    * repeated submissions cannot pile up duplicate waivers.
    */
   public function createWaiver(int $nid, string $ruleId, string $selector, string $status, string $reason, ?int $reviewerUid): void {
-    if (isset($this->waivedFingerprints($nid)[self::fingerprint($ruleId, $selector)])) {
-      return;
+    // Serialize the check-then-insert per (node, fingerprint) so two
+    // concurrent submissions of the same waiver can't both pass the
+    // existence check and each insert a duplicate.
+    $lockName = 'accessguard_waiver:' . $nid . ':' . self::fingerprint($ruleId, $selector);
+    $acquired = $this->lock->acquire($lockName);
+    if (!$acquired) {
+      $this->lock->wait($lockName, 5);
+      $this->lock->acquire($lockName);
     }
-    $this->entityTypeManager->getStorage('accessguard_waiver')->create([
-      'target_entity_type' => 'node',
-      'target_entity_id' => $nid,
-      'rule_id' => $ruleId,
-      'selector' => $selector,
-      'status' => in_array($status, ['accepted_risk', 'false_positive'], TRUE) ? $status : 'accepted_risk',
-      'reason' => $reason,
-      'reviewer' => $reviewerUid,
-    ])->save();
+    try {
+      if (isset($this->waivedFingerprints($nid)[self::fingerprint($ruleId, $selector)])) {
+        return;
+      }
+      $this->entityTypeManager->getStorage('accessguard_waiver')->create([
+        'target_entity_type' => 'node',
+        'target_entity_id' => $nid,
+        'rule_id' => $ruleId,
+        'selector' => $selector,
+        'status' => in_array($status, ['accepted_risk', 'false_positive'], TRUE) ? $status : 'accepted_risk',
+        'reason' => $reason,
+        'reviewer' => $reviewerUid,
+      ])->save();
+    }
+    finally {
+      $this->lock->release($lockName);
+    }
   }
 
   /**

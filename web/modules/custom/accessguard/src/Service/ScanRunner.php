@@ -16,6 +16,24 @@ class ScanRunner {
   ) {}
 
   /**
+   * Resolves the scanner auth token, preferring an environment variable.
+   *
+   * ACCESSGUARD_SCANNER_TOKEN, when set, wins over the stored config value,
+   * so the shared secret can be supplied purely via the environment and kept
+   * out of exported (and version-controlled) config.
+   *
+   * @param \Drupal\Core\Config\ImmutableConfig $config
+   *   The accessguard.settings config object.
+   */
+  public static function resolveToken($config): string {
+    $env = getenv('ACCESSGUARD_SCANNER_TOKEN');
+    if ($env !== FALSE && $env !== '') {
+      return $env;
+    }
+    return (string) ($config->get('scanner_auth_token') ?? '');
+  }
+
+  /**
    * Scans a URL. Returns the decoded { url, violations[] } array.
    *
    * @throws \RuntimeException
@@ -28,7 +46,7 @@ class ScanRunner {
       'json' => ['url' => $url],
       'timeout' => 60,
     ];
-    $token = (string) ($config->get('scanner_auth_token') ?? '');
+    $token = self::resolveToken($config);
     if ($token !== '') {
       $options['headers'] = ['X-Scanner-Token' => $token];
     }

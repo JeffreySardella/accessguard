@@ -19,7 +19,7 @@ services:
     arguments: ['@database']
   accessguard.waiver_matcher:
     class: Drupal\accessguard\Service\WaiverMatcher
-    arguments: ['@entity_type.manager']
+    arguments: ['@entity_type.manager', '@lock']
   accessguard.violation_analytics:
     class: Drupal\accessguard\Service\ViolationAnalytics
     arguments: ['@entity_type.manager', '@accessguard.scan_repository', '@accessguard.waiver_matcher', '@current_user']

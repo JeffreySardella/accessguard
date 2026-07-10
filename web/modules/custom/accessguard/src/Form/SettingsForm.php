@@ -44,9 +44,11 @@ class SettingsForm extends ConfigFormBase {
     $form['scanner_auth_token'] = [
       '#type' => 'password',
       '#title' => $this->t('Scanner auth token'),
-      '#description' => $hasToken
-        ? $this->t('Shared secret sent as the X-Scanner-Token header. A token is currently saved; enter a value to replace it, or leave blank to keep it.')
-        : $this->t('Shared secret sent as the X-Scanner-Token header. Must match the SCANNER_AUTH_TOKEN environment variable on the scanner service. Leave empty if the scanner does not require a token.'),
+      '#description' => $this->t('Shared secret sent as the X-Scanner-Token header, matching SCANNER_AUTH_TOKEN on the scanner service. For a secret you do not want in exported config, set the ACCESSGUARD_SCANNER_TOKEN environment variable instead — it overrides this field. @state', [
+        '@state' => $hasToken
+          ? $this->t('A token is currently saved; enter a value to replace it, or leave blank to keep it.')
+          : $this->t('Leave empty if the scanner does not require a token.'),
+      ]),
     ];
     if ($hasToken) {
       $form['scanner_auth_token_clear'] = [

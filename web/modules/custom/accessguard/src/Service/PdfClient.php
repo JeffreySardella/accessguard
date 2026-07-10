@@ -28,7 +28,7 @@ class PdfClient {
       'json' => ['html' => $html],
       'timeout' => 60,
     ];
-    $token = (string) ($config->get('scanner_auth_token') ?? '');
+    $token = ScanRunner::resolveToken($config);
     if ($token !== '') {
       $options['headers'] = ['X-Scanner-Token' => $token];
     }

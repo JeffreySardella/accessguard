@@ -80,6 +80,34 @@ class ScanRunnerTest extends UnitTestCase {
   }
 
   /**
+   * Tests that the token env var overrides the configured value.
+   *
+   * Lets the shared secret be supplied via the environment and kept out of
+   * exported config.
+   */
+  public function testEnvTokenOverridesConfig(): void {
+    $transactions = [];
+    $mock = new MockHandler([new Response(200, [], json_encode(['url' => 'x', 'violations' => []]))]);
+    $stack = HandlerStack::create($mock);
+    $stack->push(Middleware::history($transactions));
+    $client = new Client(['handler' => $stack]);
+    $config = $this->getConfigFactoryStub([
+      'accessguard.settings' => [
+        'scanner_endpoint' => 'http://scanner:3000',
+        'scanner_auth_token' => 'from-config',
+      ],
+    ]);
+    putenv('ACCESSGUARD_SCANNER_TOKEN=from-env');
+    try {
+      (new ScanRunner($client, $config))->scan('http://x/node/1');
+    }
+    finally {
+      putenv('ACCESSGUARD_SCANNER_TOKEN');
+    }
+    $this->assertSame('from-env', $transactions[0]['request']->getHeaderLine('X-Scanner-Token'));
+  }
+
+  /**
    * Tests that a well-formed-JSON-but-wrong-shape response throws.
    */
   public function testMalformedJsonThrows(): void {
