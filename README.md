@@ -57,7 +57,7 @@ Lighthouse's accessibility audit *uses axe-core under the hood* (a curated subse
 | Author attribution | ❌ | ❌ | ✅ |
 | Audit-ready report export | ❌ | ❌ | ✅ |
 
-See `benchmark/RESULTS.md` for an empirical detection comparison on the demo fixtures (run it yourself: `cd benchmark && npm install && npm run benchmark`).
+`benchmark/RESULTS.md` shows a detection sanity check on the demo fixtures (run it yourself: `cd benchmark && npm install && npm run benchmark`). One honest caveat: all six fixtures target rules that are *inside* Lighthouse's axe subset, so the harness demonstrates detection parity on common rules — the full-ruleset coverage advantage (point 1 above) follows from axe's WCAG 2.2 AA ruleset being a superset, not from these fixtures.
 
 ## Security
 

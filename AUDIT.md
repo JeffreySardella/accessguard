@@ -18,7 +18,7 @@ The most important problems are **not** in the areas the project already defends
 
 None of these are hard to fix, and the existing test infrastructure makes them safe to fix.
 
-> **Remediation status (2026-07-10):** All six high-severity findings (H1–H6) have been fixed in follow-up commits on this branch, along with M1 (gate), M2, M5, M6, M8 (partial: password field + no echo; storage is still plain config), M9, M11, M12, M13, M14, M15, M16, M18, M21, and lows L1, L3, L4, L7. Still open: M3, M4, M7, M10, M17, M19 (partially closed — worker/gate-ranking/save-hook now tested; Drush command still untested), M20, and the remaining lows.
+> **Remediation status (2026-07-10):** All six high-severity findings (H1–H6) have been fixed in follow-up commits on this branch, along with M1 (gate + overview surfacing), M2, M3 (batched loading via a shared analytics context), M4 (target-column indexes + opt-in scan retention), M5, M6, M7 (list-tag/context caching replaces max-age 0), M8 (partial: password field + no echo; storage is still plain config — Key module integration remains), M9, M11, M12, M13, M14, M15, M16, M18, M19 (worker, gate ranking, save hook, and Drush command all now tested), M20 (claims corrected in README/RESULTS), M21, and lows L1, L3, L4, L5, L7. Still open: M10 (dev compose ships open scanner), M17 (scanner IPv6), L2 (waiver insert race), and the remaining doc/test lows (L8–L17).
 
 ---
 
