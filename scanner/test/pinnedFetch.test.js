@@ -19,6 +19,30 @@ test('connects to the pinned IP, not DNS', async () => {
   expect(res.body.toString()).toBe(`hello accessguard-pin-test.invalid:${port}`);
 });
 
+test('forwards a POST body with a corrected content-length', async () => {
+  let received = '';
+  let receivedLength;
+  const server = http.createServer((req, res) => {
+    receivedLength = req.headers['content-length'];
+    req.on('data', (c) => { received += c; });
+    req.on('end', () => { res.end('ok'); });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  const res = await fetchPinned(`http://accessguard-pin-test.invalid:${port}/p`, '127.0.0.1', {
+    method: 'POST',
+    // A deliberately wrong inbound content-length must not be forwarded.
+    headers: { 'content-length': '9999' },
+    body: 'hello body',
+  });
+  server.close();
+
+  expect(res.status).toBe(200);
+  expect(received).toBe('hello body');
+  expect(receivedLength).toBe(String(Buffer.byteLength('hello body')));
+});
+
 test('returns redirects without following them', async () => {
   const server = http.createServer((req, res) => {
     res.statusCode = 302;

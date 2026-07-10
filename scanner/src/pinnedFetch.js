@@ -54,6 +54,18 @@ export function fetchPinned(rawUrl, ip, { method = 'GET', headers = {}, body = n
   requestHeaders.host = url.host;
   // Only encodings we can decode locally.
   requestHeaders['accept-encoding'] = 'gzip, deflate, br';
+  // Never forward the caller's content-length verbatim: the body we actually
+  // replay may differ (or be absent — Puppeteer surfaces no postData for some
+  // binary/multipart requests), and a stale length makes the upstream hang
+  // waiting for bytes that never arrive. Set it from the real body instead.
+  for (const name of Object.keys(requestHeaders)) {
+    if (name.toLowerCase() === 'content-length') {
+      delete requestHeaders[name];
+    }
+  }
+  if (body != null && body !== '') {
+    requestHeaders['content-length'] = Buffer.byteLength(body);
+  }
 
   const options = {
     host: ip,
