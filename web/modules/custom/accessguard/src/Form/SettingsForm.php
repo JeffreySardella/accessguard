@@ -93,6 +93,13 @@ class SettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('rescan_batch') ?: 25,
       '#min' => 1,
     ];
+    $form['retention_days'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Scan retention (days)'),
+      '#description' => $this->t('Cron deletes scans (and their violations) older than this. The latest scan of every page is always kept, so dashboards and the publish gate are unaffected. 0 keeps all scans forever — with daily re-scanning that is roughly 365 scans per page per year.'),
+      '#default_value' => (int) ($config->get('retention_days') ?? 0),
+      '#min' => 0,
+    ];
 
     return parent::buildForm($form, $form_state);
   }
@@ -135,6 +142,7 @@ class SettingsForm extends ConfigFormBase {
       ->set('rescan_enabled', (bool) $form_state->getValue('rescan_enabled'))
       ->set('rescan_interval', (int) $form_state->getValue('rescan_interval'))
       ->set('rescan_batch', (int) $form_state->getValue('rescan_batch'))
+      ->set('retention_days', (int) $form_state->getValue('retention_days'))
       ->save();
     parent::submitForm($form, $form_state);
   }

@@ -7,12 +7,14 @@ use Drupal\accessguard\Service\PdfClient;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the PDF export route degrades gracefully when the scanner is down.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class PdfExportTest extends KernelTestBase {
 
   use UserCreationTrait;

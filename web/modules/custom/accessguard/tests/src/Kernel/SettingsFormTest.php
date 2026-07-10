@@ -5,12 +5,14 @@ namespace Drupal\Tests\accessguard\Kernel;
 use Drupal\Core\Form\FormState;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\accessguard\Form\SettingsForm;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests that the AccessGuard settings form saves its values.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class SettingsFormTest extends KernelTestBase {
 
   /**

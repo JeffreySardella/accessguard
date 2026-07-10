@@ -18,7 +18,7 @@ class ViolationAnalytics {
   /**
    * Memoized per-node context, built on first call to accessibleScans().
    *
-   * @var array<int, array{nid:int, created:int, author_uid:?int, violations:array, waived:array<string,string>}>|null
+   * @var array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>|null
    */
   protected ?array $scanContextCache = NULL;
 
@@ -189,17 +189,34 @@ class ViolationAnalytics {
    * $scanContextCache, since the underlying node/violation/waiver lookups
    * are identical on every call within the same request.
    *
-   * @return \Generator<array{nid:int, created:int, author_uid:?int, violations:array, waived:array<string,string>}>
+   * @return \Generator<array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   protected function accessibleScans(): \Generator {
-    yield from $this->scanContextCache ??= $this->buildScanContext();
+    yield from $this->latestScanContexts();
+  }
+
+  /**
+   * The memoized per-node latest-scan contexts, for callers needing arrays.
+   *
+   * Public so the CSV export and the PDF report builder can iterate the same
+   * batched, access-filtered data instead of re-querying per node.
+   *
+   * @return array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
+   *   Per-node context for each latest scan the current user may view.
+   */
+  public function latestScanContexts(): array {
+    return $this->scanContextCache ??= $this->buildScanContext();
   }
 
   /**
    * Builds the per-node context for each latest scan the current user may view.
    *
-   * @return array<int, array{nid:int, created:int, author_uid:?int, violations:array, waived:array<string,string>}>
+   * Everything is batch-loaded — one query for scans, nodes, violations, and
+   * waivers each — so reporting cost doesn't grow to N-queries-per-node on
+   * sites with many scanned pages.
+   *
+   * @return array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   protected function buildScanContext(): array {
@@ -207,22 +224,50 @@ class ViolationAnalytics {
     $violationStorage = $this->entityTypeManager->getStorage('accessguard_violation');
     $nodeStorage = $this->entityTypeManager->getStorage('node');
 
-    $context = [];
     $latestIds = $this->scanRepository->latestScanIdByNode();
     $scans = $scanStorage->loadMultiple(array_values($latestIds));
+
+    // Batch-load the nodes, then keep only the scans the user may see.
+    $nodeStorage->loadMultiple(array_map(fn($scan) => (int) $scan->get('target_entity_id')->value, $scans));
+    $accessible = [];
     foreach ($scans as $scan) {
       $nid = (int) $scan->get('target_entity_id')->value;
       $node = $nodeStorage->load($nid);
-      if (!$node || !$node->access('view', $this->currentUser)) {
-        continue;
+      if ($node && $node->access('view', $this->currentUser)) {
+        $accessible[(int) $scan->id()] = $scan;
       }
-      $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
+    }
+    if (!$accessible) {
+      return [];
+    }
+
+    // All violations of all accessible latest scans in one query.
+    $violationsByScan = [];
+    $vids = $violationStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('scan_id', array_keys($accessible), 'IN')
+      ->execute();
+    foreach ($violationStorage->loadMultiple($vids) as $violation) {
+      $violationsByScan[(int) $violation->get('scan_id')->target_id][] = $violation;
+    }
+
+    // All waivers of all accessible nodes in one query.
+    $waivers = $this->waiverMatcher->waiversByNodes(
+      array_map(fn($scan) => (int) $scan->get('target_entity_id')->value, $accessible)
+    );
+
+    $context = [];
+    foreach ($accessible as $scanId => $scan) {
+      $nid = (int) $scan->get('target_entity_id')->value;
+      $nodeWaivers = $waivers[$nid] ?? [];
       $context[] = [
         'nid' => $nid,
         'created' => (int) $scan->get('created')->value,
+        'url' => (string) $scan->get('url')->value,
         'author_uid' => $scan->get('content_author')->target_id ? (int) $scan->get('content_author')->target_id : NULL,
-        'violations' => $violations,
-        'waived' => $this->waiverMatcher->waivedFingerprints($nid),
+        'violations' => $violationsByScan[$scanId] ?? [],
+        'waived' => array_map(fn(array $w) => $w['status'], $nodeWaivers),
+        'waiver_reasons' => array_map(fn(array $w) => $w['reason'], $nodeWaivers),
       ];
     }
     return $context;

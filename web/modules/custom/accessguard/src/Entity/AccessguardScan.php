@@ -17,8 +17,9 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   base_table: 'accessguard_scan',
   handlers: [
     'views_data' => 'Drupal\views\EntityViewsData',
+    'storage_schema' => 'Drupal\accessguard\Entity\Storage\TargetIndexStorageSchema',
   ],
-  admin_permission: 'view accessguard reports',
+  admin_permission: 'administer accessguard',
   entity_keys: [
     'id' => 'id',
     'uuid' => 'uuid',

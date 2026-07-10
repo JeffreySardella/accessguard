@@ -9,12 +9,12 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use PHPUnit\Framework\Attributes\Group;
 
 /**
  * Tests ScanRunner's handling of the scanner microservice's HTTP response.
- *
- * @group accessguard
  */
+#[Group('accessguard')]
 class ScanRunnerTest extends UnitTestCase {
 
   /**

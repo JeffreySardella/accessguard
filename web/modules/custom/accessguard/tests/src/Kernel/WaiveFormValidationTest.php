@@ -8,12 +8,14 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Symfony\Component\HttpFoundation\Request;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests that WaiveForm only accepts real, un-waived current violations.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class WaiveFormValidationTest extends KernelTestBase {
 
   /**

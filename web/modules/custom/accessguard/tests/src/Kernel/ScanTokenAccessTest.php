@@ -10,12 +10,14 @@ use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\user\Entity\Role;
 use Symfony\Component\HttpFoundation\Request;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the signed scan-access token grant for unpublished nodes.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class ScanTokenAccessTest extends KernelTestBase {
 
   /**

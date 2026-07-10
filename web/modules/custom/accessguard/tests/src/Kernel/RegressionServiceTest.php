@@ -3,12 +3,14 @@
 namespace Drupal\Tests\accessguard\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests RegressionService's diffing of a node's two latest scans.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class RegressionServiceTest extends KernelTestBase {
 
   /**

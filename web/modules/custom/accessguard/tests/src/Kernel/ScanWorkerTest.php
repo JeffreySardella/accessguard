@@ -9,12 +9,14 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the scan queue worker's failure handling and URL building.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class ScanWorkerTest extends KernelTestBase {
 
   /**

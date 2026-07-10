@@ -26,19 +26,43 @@ class WaiverMatcher {
    * Waived fingerprints for a node.
    *
    * @return array<string, string>
-   *   Map of "rule_id|selector" => waiver status.
+   *   Map of fingerprint => waiver status.
    */
   public function waivedFingerprints(int $nid): array {
+    $details = $this->waiversByNodes([$nid])[$nid] ?? [];
+    return array_map(fn(array $w) => $w['status'], $details);
+  }
+
+  /**
+   * Waiver status and reason for many nodes in one query.
+   *
+   * Reporting surfaces iterate every scanned node; querying waivers per node
+   * turns each dashboard/CSV/PDF request into N queries.
+   *
+   * @param array<int, int> $nids
+   *   Node ids to look up.
+   *
+   * @return array<int, array<string, array{status: string, reason: string}>>
+   *   Per-node map of fingerprint => waiver details. Every requested node id
+   *   is present (empty array when the node has no waivers).
+   */
+  public function waiversByNodes(array $nids): array {
+    $map = array_fill_keys(array_map('intval', $nids), []);
+    if (!$nids) {
+      return $map;
+    }
     $storage = $this->entityTypeManager->getStorage('accessguard_waiver');
     $ids = $storage->getQuery()
       ->accessCheck(FALSE)
       ->condition('target_entity_type', 'node')
-      ->condition('target_entity_id', $nid)
+      ->condition('target_entity_id', $nids, 'IN')
       ->execute();
-    $map = [];
     foreach ($storage->loadMultiple($ids) as $waiver) {
       $fp = self::fingerprint($waiver->get('rule_id')->value, (string) $waiver->get('selector')->value);
-      $map[$fp] = $waiver->get('status')->value;
+      $map[(int) $waiver->get('target_entity_id')->value][$fp] = [
+        'status' => (string) $waiver->get('status')->value,
+        'reason' => (string) $waiver->get('reason')->value,
+      ];
     }
     return $map;
   }

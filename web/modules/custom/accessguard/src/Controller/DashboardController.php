@@ -129,7 +129,13 @@ class DashboardController extends ControllerBase {
       '#rows' => $rows,
       '#empty' => $this->t('No scans yet. Run: drush accessguard:scan <nid> --now'),
     ];
-    $build['#cache'] = ['max-age' => 0];
+    // Cacheable: any scan/violation/waiver write invalidates the entity list
+    // tags, node saves invalidate node_list (titles appear in rows), and the
+    // node-access filtering and empty-state hint vary by the contexts below.
+    $build['#cache'] = [
+      'tags' => ['accessguard_scan_list', 'accessguard_violation_list', 'accessguard_waiver_list', 'node_list'],
+      'contexts' => ['user.node_grants:view', 'user.permissions'],
+    ];
 
     $build['export'] = [
       '#type' => 'link',
@@ -152,37 +158,29 @@ class DashboardController extends ControllerBase {
    * Streams a CSV of current violations (latest scan per node).
    */
   public function exportCsv() {
-    $scanStorage = $this->entityTypeManagerService->getStorage('accessguard_scan');
-    $violationStorage = $this->entityTypeManagerService->getStorage('accessguard_violation');
     $nodeStorage = $this->entityTypeManagerService->getStorage('node');
-
-    // Load only the latest scan per node (not every scan ever run).
-    $latestIds = $this->scanRepository->latestScanIdByNode();
-    $latest = [];
-    foreach ($scanStorage->loadMultiple(array_values($latestIds)) as $scan) {
-      $latest[(int) $scan->get('target_entity_id')->value] = $scan;
-    }
 
     $rows = [];
     $rows[] = ['Page', 'Node ID', 'URL', 'Scan date', 'Rule', 'Impact', 'WCAG', 'Selector', 'Status'];
-    foreach ($latest as $nid => $scan) {
+    // The shared analytics context is batch-loaded and node-access filtered,
+    // so the export agrees with every other reporting surface and does not
+    // issue per-node queries.
+    foreach ($this->violationAnalytics->latestScanContexts() as $ctx) {
+      $nid = $ctx['nid'];
       $node = $nodeStorage->load($nid);
-      // The audit export honors node-level access like the overview does.
-      if (!$node || !$node->access('view')) {
+      if (!$node) {
         continue;
       }
-      $waivedByNode = $this->waiverMatcher->waivedFingerprints($nid);
       $title = $node->label();
-      $date = $this->dateFormatter->format((int) $scan->get('created')->value, 'short');
-      $url = $scan->get('url')->value;
-      $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
-      if (!$violations) {
+      $date = $this->dateFormatter->format($ctx['created'], 'short');
+      $url = $ctx['url'];
+      if (!$ctx['violations']) {
         $rows[] = [$title, $nid, $url, $date, '(no violations)', '', '', '', ''];
         continue;
       }
-      foreach ($violations as $v) {
+      foreach ($ctx['violations'] as $v) {
         $fp = WaiverMatcher::fingerprint($v->get('rule_id')->value, (string) $v->get('selector')->value);
-        $status = $waivedByNode[$fp] ?? 'open';
+        $status = $ctx['waived'][$fp] ?? 'open';
         $rows[] = [
           $title,
           $nid,
@@ -199,7 +197,9 @@ class DashboardController extends ControllerBase {
 
     $handle = fopen('php://temp', 'r+');
     foreach ($rows as $row) {
-      fputcsv($handle, array_map([CsvSafe::class, 'cell'], $row));
+      // No escape character (RFC 4180); also PHP 8.4+ deprecates relying on
+      // the historical "\\" default.
+      fputcsv($handle, array_map([CsvSafe::class, 'cell'], $row), escape: '');
     }
     rewind($handle);
     $csv = stream_get_contents($handle);
@@ -353,7 +353,16 @@ class DashboardController extends ControllerBase {
       '#empty' => $this->t('No scans yet.'),
     ];
     $build['history_pager'] = ['#type' => 'pager'];
-    $build['#cache'] = ['max-age' => 0];
+    // Cacheable per node: scan/violation/waiver writes invalidate the list
+    // tags, the node's own tags cover title changes, the pager context covers
+    // history pages, and permissions gate the waive/un-waive links.
+    $build['#cache'] = [
+      'tags' => array_merge(
+        ['accessguard_scan_list', 'accessguard_violation_list', 'accessguard_waiver_list'],
+        $node->getCacheTags()
+      ),
+      'contexts' => ['user.permissions', 'url.query_args.pagers:0'],
+    ];
     return $build;
   }
 

@@ -6,12 +6,14 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests ViolationAnalytics aggregation, access filtering, and waiver split.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class ViolationAnalyticsTest extends KernelTestBase {
 
   use UserCreationTrait;

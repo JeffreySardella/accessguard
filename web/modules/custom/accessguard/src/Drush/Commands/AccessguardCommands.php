@@ -49,7 +49,7 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
   public function scan(int $nid, array $options = ['now' => FALSE]): void {
     if (empty($options['now'])) {
       $this->queueFactory->get('accessguard_scan_queue')->createItem(['nid' => $nid, 'trigger' => 'manual']);
-      $this->logger()->success("Queued scan for node $nid.");
+      $this->io()->success("Queued scan for node $nid.");
       return;
     }
     $node = $this->entityTypeManager->getStorage('node')->load($nid);
@@ -62,7 +62,7 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
     $url = $this->scanAccessToken->buildScanUrl($node);
     $result = $this->scanRunner->scan($url);
     $scan = $this->scanRecorder->record('node', (int) $nid, (int) $node->getOwnerId(), 'manual', $result);
-    $this->logger()->success("Scan {$scan->id()}: " .
+    $this->io()->success("Scan {$scan->id()}: " .
       $scan->get('count_critical')->value . " critical, " .
       $scan->get('count_serious')->value . " serious.");
   }

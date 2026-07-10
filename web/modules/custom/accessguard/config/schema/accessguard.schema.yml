@@ -26,3 +26,6 @@ accessguard.settings:
     rescan_batch:
       type: integer
       label: 'Max nodes enqueued per cron run'
+    retention_days:
+      type: integer
+      label: 'Days to keep old scans (0 = forever; the latest scan per node is always kept)'

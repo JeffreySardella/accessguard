@@ -4,12 +4,14 @@ namespace Drupal\Tests\accessguard\Kernel;
 
 use Drupal\accessguard\Service\WaiverMatcher;
 use Drupal\KernelTests\KernelTestBase;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests that WaiverMatcher records and looks up waivers by fingerprint.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class WaiverTest extends KernelTestBase {
 
   /**

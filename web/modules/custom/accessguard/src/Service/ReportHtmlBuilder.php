@@ -2,12 +2,10 @@
 
 namespace Drupal\accessguard\Service;
 
-use Drupal\accessguard\Repository\ScanRepository;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Datetime\DateFormatterInterface;
-use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 
@@ -21,8 +19,6 @@ class ReportHtmlBuilder {
 
   public function __construct(
     protected ViolationAnalytics $analytics,
-    protected ScanRepository $scanRepository,
-    protected WaiverMatcher $waiverMatcher,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected AccountProxyInterface $currentUser,
     protected DateFormatterInterface $dateFormatter,
@@ -116,40 +112,35 @@ class ReportHtmlBuilder {
    * Per-page findings, including waived items with their reasons.
    */
   protected function findingsSection(): string {
-    $scanStorage = $this->entityTypeManager->getStorage('accessguard_scan');
-    $violationStorage = $this->entityTypeManager->getStorage('accessguard_violation');
     $nodeStorage = $this->entityTypeManager->getStorage('node');
-    $waiverStorage = $this->entityTypeManager->getStorage('accessguard_waiver');
 
     $out = '<section><h2>Findings by page</h2>';
-    $latestIds = $this->scanRepository->latestScanIdByNode();
-    foreach ($scanStorage->loadMultiple(array_values($latestIds)) as $scan) {
-      $nid = (int) $scan->get('target_entity_id')->value;
-      $node = $nodeStorage->load($nid);
-      if (!$node || !$node->access('view', $this->currentUser)) {
+    // The shared analytics context is batch-loaded and node-access filtered,
+    // so the report agrees with the summary/rule/author sections above and
+    // does not issue per-node queries.
+    foreach ($this->analytics->latestScanContexts() as $ctx) {
+      $node = $nodeStorage->load($ctx['nid']);
+      if (!$node) {
         continue;
       }
-      $date = $this->dateFormatter->format((int) $scan->get('created')->value, 'short');
-      $url = Html::escape((string) $scan->get('url')->value);
+      $date = $this->dateFormatter->format($ctx['created'], 'short');
+      $url = Html::escape($ctx['url']);
       $out .= '<div class="page-block"><h3>' . Html::escape($node->label()) . '</h3>'
         . '<p class="meta">' . $url . ' &middot; last scan ' . Html::escape($date) . '</p>';
 
-      $waived = $this->waiverMatcher->waivedFingerprints($nid);
-      $reasons = $this->waiverReasons($waiverStorage, $nid);
-      $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
-      if (!$violations) {
+      if (!$ctx['violations']) {
         $out .= '<p>No violations in the latest scan.</p></div>';
         continue;
       }
       $out .= '<table><thead><tr><th>Rule</th><th>Impact</th><th>WCAG</th><th>Selector</th><th>Status</th></tr></thead><tbody>';
-      foreach ($violations as $v) {
+      foreach ($ctx['violations'] as $v) {
         $rule = (string) $v->get('rule_id')->value;
         $selector = (string) $v->get('selector')->value;
         $fp = WaiverMatcher::fingerprint($rule, $selector);
-        if (isset($waived[$fp])) {
-          $status = 'Waived (' . Html::escape(str_replace('_', ' ', $waived[$fp])) . ')';
-          if (isset($reasons[$fp]) && $reasons[$fp] !== '') {
-            $status .= ': ' . Html::escape($reasons[$fp]);
+        if (isset($ctx['waived'][$fp])) {
+          $status = 'Waived (' . Html::escape(str_replace('_', ' ', $ctx['waived'][$fp])) . ')';
+          if (isset($ctx['waiver_reasons'][$fp]) && $ctx['waiver_reasons'][$fp] !== '') {
+            $status .= ': ' . Html::escape($ctx['waiver_reasons'][$fp]);
           }
           $cls = ' class="waived"';
         }
@@ -164,26 +155,6 @@ class ReportHtmlBuilder {
       $out .= '</tbody></table></div>';
     }
     return $out . '</section>';
-  }
-
-  /**
-   * Waiver reasons for a node keyed by rule+selector fingerprint.
-   *
-   * @return array<string, string>
-   *   Map of "rule_id|selector" fingerprint to waiver reason text.
-   */
-  protected function waiverReasons(EntityStorageInterface $waiverStorage, int $nid): array {
-    $ids = $waiverStorage->getQuery()
-      ->accessCheck(FALSE)
-      ->condition('target_entity_type', 'node')
-      ->condition('target_entity_id', $nid)
-      ->execute();
-    $map = [];
-    foreach ($waiverStorage->loadMultiple($ids) as $w) {
-      $fp = WaiverMatcher::fingerprint($w->get('rule_id')->value, (string) $w->get('selector')->value);
-      $map[$fp] = (string) $w->get('reason')->value;
-    }
-    return $map;
   }
 
 }

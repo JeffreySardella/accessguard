@@ -7,12 +7,14 @@ use Drupal\user\Entity\Role;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the AccessguardGate publish-gating constraint.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class PublishGateTest extends KernelTestBase {
 
   /**

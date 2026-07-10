@@ -5,12 +5,14 @@ namespace Drupal\Tests\accessguard\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests cron's site-wide re-scanning of stale or unscanned published nodes.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class CronRescanTest extends KernelTestBase {
 
   /**
@@ -141,6 +143,49 @@ class CronRescanTest extends KernelTestBase {
 
     accessguard_cron();
     $this->assertSame(2, $queue->numberOfItems());
+  }
+
+  /**
+   * Tests that retention purges old scans but always keeps the latest.
+   *
+   * The latest scan per node feeds the publish gate and every dashboard, so
+   * retention must never delete it — even when it is itself older than the
+   * window.
+   */
+  public function testRetentionPurgesOldScansButKeepsLatest(): void {
+    \Drupal::configFactory()->getEditable('accessguard.settings')->set('retention_days', 30)->save();
+    $node = $this->createPublishedNodeQuietly('retention');
+    $scanStorage = \Drupal::entityTypeManager()->getStorage('accessguard_scan');
+    $violationStorage = \Drupal::entityTypeManager()->getStorage('accessguard_violation');
+    $now = \Drupal::time()->getRequestTime();
+
+    // Three scans, all older than the 30-day window; the newest of them is
+    // still the node's latest scan and must survive.
+    $ids = [];
+    foreach ([100, 90, 60] as $daysAgo) {
+      $scan = $scanStorage->create([
+        'target_entity_type' => 'node',
+        'target_entity_id' => $node->id(),
+        'status' => 'complete',
+        'created' => $now - $daysAgo * 86400,
+      ]);
+      $scan->save();
+      $ids[$daysAgo] = (int) $scan->id();
+    }
+    $violation = $violationStorage->create([
+      'scan_id' => $ids[100],
+      'rule_id' => 'image-alt',
+      'impact' => 'critical',
+      'selector' => 'img',
+    ]);
+    $violation->save();
+
+    accessguard_cron();
+
+    $remaining = array_map('intval', array_values($scanStorage->getQuery()->accessCheck(FALSE)->execute()));
+    $this->assertSame([$ids[60]], $remaining, 'Only the latest scan survives.');
+    // The purged scan's violations went with it.
+    $this->assertEmpty($violationStorage->getQuery()->accessCheck(FALSE)->execute());
   }
 
   /**

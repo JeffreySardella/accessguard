@@ -5,12 +5,14 @@ namespace Drupal\Tests\accessguard\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests that deleting a node cleans up its scans and violations.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class NodeDeleteCleanupTest extends KernelTestBase {
 
   /**

@@ -6,3 +6,4 @@ gate_threshold: 'critical'
 rescan_enabled: true
 rescan_interval: 86400
 rescan_batch: 25
+retention_days: 0

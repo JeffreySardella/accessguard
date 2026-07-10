@@ -38,7 +38,7 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
   /**
    * {@inheritdoc}
    */
-  public function validate($entity, Constraint $constraint) {
+  public function validate($entity, Constraint $constraint): void {
     if (!$entity || $entity->isNew() || !$entity->isPublished()) {
       return;
     }

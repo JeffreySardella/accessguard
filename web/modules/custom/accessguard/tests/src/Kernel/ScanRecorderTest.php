@@ -3,12 +3,14 @@
 namespace Drupal\Tests\accessguard\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests that ScanRecorder persists a scan result and its violations.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class ScanRecorderTest extends KernelTestBase {
 
   /**
