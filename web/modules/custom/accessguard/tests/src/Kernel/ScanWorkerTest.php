@@ -8,6 +8,7 @@ use Drupal\Core\Queue\SuspendQueueException;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
+use PHPUnit\Framework\MockObject\MockObject;
 
 /**
  * Tests the scan queue worker's failure handling and URL building.
@@ -40,7 +41,7 @@ class ScanWorkerTest extends KernelTestBase {
   /**
    * Replaces the scan runner with a mock and returns it.
    */
-  private function mockRunner(): ScanRunner&\PHPUnit\Framework\MockObject\MockObject {
+  private function mockRunner(): ScanRunner&MockObject {
     $runner = $this->createMock(ScanRunner::class);
     $this->container->set('accessguard.scan_runner', $runner);
     return $runner;
