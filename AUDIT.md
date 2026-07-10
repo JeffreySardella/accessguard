@@ -18,7 +18,7 @@ The most important problems are **not** in the areas the project already defends
 
 None of these are hard to fix, and the existing test infrastructure makes them safe to fix.
 
-> **Remediation status (2026-07-10):** H1–H5 have been fixed in follow-up commits on this branch (signed scan-access tokens for unpublished content, health-probe-gated queue suspension with bounded per-item retry, a scanner concurrency cap with 503 shedding, guarded `req.continue()` plus an unhandled-rejection backstop, restart policy + container healthcheck). M16 (Dockerfile lockfile bypass) was fixed alongside. H6 (Puppeteer/Chromium upgrade) and the remaining medium/low findings are still open.
+> **Remediation status (2026-07-10):** All six high-severity findings (H1–H6) have been fixed in follow-up commits on this branch, along with M1 (gate), M2, M5, M6, M8 (partial: password field + no echo; storage is still plain config), M9, M11, M12, M13, M14, M15, M16, M18, M21, and lows L1, L3, L4, L7. Still open: M3, M4, M7, M10, M17, M19 (partially closed — worker/gate-ranking/save-hook now tested; Drush command still untested), M20, and the remaining lows.
 
 ---
 
