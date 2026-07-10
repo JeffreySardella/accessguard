@@ -40,7 +40,10 @@ export async function runScan(url) {
   if (parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
     const { hostname, ip } = await resolveAndAssert(url);
     if (ip) {
-      args.push(`--host-resolver-rules=MAP ${hostname} ${ip}`);
+      // Chromium's host-resolver-rules parser wants IPv6 replacements
+      // bracketed; an unbracketed v6 rule is silently ignored.
+      const target = ip.includes(':') ? `[${ip}]` : ip;
+      args.push(`--host-resolver-rules=MAP ${hostname} ${target}`);
     }
   }
 

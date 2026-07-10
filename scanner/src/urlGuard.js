@@ -1,12 +1,30 @@
 import dns from 'node:dns';
+import net from 'node:net';
 
 const { lookup } = dns.promises;
+
+// Normalizes an IPv4-mapped IPv6 address to its IPv4 form, in BOTH the dotted
+// (`::ffff:1.2.3.4`) and hex (`::ffff:a9fe:a9fe`) spellings, so the IPv4 range
+// checks below can't be bypassed by choosing the hex form (e.g.
+// `::ffff:a9fe:a9fe` is 169.254.169.254). Returns the input unchanged when it
+// is not a mapped address.
+function normalizeMappedIp(ip) {
+  const low = ip.toLowerCase();
+  const dotted = low.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) return dotted[1];
+  const hex = low.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+  }
+  return ip;
+}
 
 // Returns true if an IP address is in a range we must never scan (loopback,
 // private, link-local, CGNAT, unspecified). Blocks the core SSRF vectors.
 export function isBlockedIp(ip) {
-  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  if (mapped) ip = mapped[1];
+  ip = normalizeMappedIp(ip);
 
   if (ip.includes('.')) {
     const p = ip.split('.').map(Number);
@@ -61,13 +79,27 @@ export async function resolveAndAssert(rawUrl) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('invalid_url_scheme');
   }
-  const addrs = await lookup(parsed.hostname, { all: true });
+  // URL keeps the brackets on an IPv6 literal host ([2606:4700::]); strip them
+  // so both dns.lookup and net.isIP see the bare address.
+  const host = parsed.hostname.replace(/^\[|\]$/g, '');
+
+  // An IP literal needs no DNS: validate it directly and pin it. Without this,
+  // dns.lookup on a v6 literal throws ENOTFOUND and every public IPv6 target
+  // is wrongly rejected.
+  if (net.isIP(host)) {
+    if (!allowPrivateTargets() && isBlockedIp(host)) {
+      throw new Error('blocked_host');
+    }
+    return { hostname: host, ip: host };
+  }
+
+  const addrs = await lookup(host, { all: true });
   if (!allowPrivateTargets()) {
     if (addrs.length === 0 || addrs.some((a) => isBlockedIp(a.address))) {
       throw new Error('blocked_host');
     }
   }
-  return { hostname: parsed.hostname, ip: addrs[0]?.address ?? null };
+  return { hostname: host, ip: addrs[0]?.address ?? null };
 }
 
 // Throws if the URL must not be scanned (see resolveAndAssert).
