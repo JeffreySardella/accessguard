@@ -15,6 +15,26 @@ app.use((req, res, next) => (req.path === '/pdf' ? next() : jsonSmall(req, res, 
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// Every /scan and /pdf request launches a full Chromium (~hundreds of MB), so
+// unbounded concurrency lets a burst of requests OOM the container. Cap
+// in-flight browser work and shed the excess with 503 so the client (the
+// Drupal queue) backs off and retries instead of piling on.
+let inFlight = 0;
+function withBrowserSlot(handler) {
+  return async (req, res) => {
+    const max = Math.max(1, parseInt(process.env.SCANNER_MAX_CONCURRENCY || '3', 10) || 3);
+    if (inFlight >= max) {
+      return res.status(503).json({ error: 'scanner_busy' });
+    }
+    inFlight++;
+    try {
+      await handler(req, res);
+    } finally {
+      inFlight--;
+    }
+  };
+}
+
 // Optional shared-secret auth: when SCANNER_AUTH_TOKEN is set, /scan requires
 // a matching X-Scanner-Token header. Hashing both sides makes the comparison
 // timing-safe regardless of length. Unset (the default) keeps the service
@@ -28,7 +48,7 @@ function isAuthorized(req) {
   return timingSafeEqual(a, b);
 }
 
-app.post('/scan', async (req, res) => {
+app.post('/scan', withBrowserSlot(async (req, res) => {
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
@@ -48,9 +68,9 @@ app.post('/scan', async (req, res) => {
     console.error('[accessguard-scanner] scan failed:', err);
     res.status(500).json({ error: 'scan_failed' });
   }
-});
+}));
 
-app.post('/pdf', jsonPdf, async (req, res) => {
+app.post('/pdf', jsonPdf, withBrowserSlot(async (req, res) => {
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
@@ -66,9 +86,16 @@ app.post('/pdf', jsonPdf, async (req, res) => {
     console.error('[accessguard-scanner] pdf failed:', err);
     res.status(500).json({ error: 'pdf_failed' });
   }
-});
+}));
 
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
+  // Last-resort guard: a rejection that escapes a request handler (e.g. a
+  // Puppeteer event firing after browser teardown) must not kill the whole
+  // service and every in-flight scan with it. Disabled under test so real
+  // bugs still surface loudly there.
+  process.on('unhandledRejection', (reason) => {
+    console.error('[accessguard-scanner] unhandled rejection:', reason);
+  });
   app.listen(PORT, () => console.log(`accessguard-scanner listening on ${PORT}`));
 }

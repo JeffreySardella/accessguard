@@ -8,7 +8,9 @@ services:
     build:
       context: ../scanner
       dockerfile: Dockerfile
-    restart: "no"
+    # Restart on crash: a scan-time failure must not leave the service dead
+    # (the Dockerfile HEALTHCHECK makes a wedged container visible too).
+    restart: unless-stopped
     expose:
       - "3000"
     environment:

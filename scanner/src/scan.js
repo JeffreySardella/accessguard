@@ -50,7 +50,10 @@ export async function runScan(url) {
     page.on('request', async (req) => {
       const reqUrl = req.url();
       if (!/^https?:/i.test(reqUrl)) {
-        req.continue();
+        // Guarded like the abort path: if the browser is torn down (e.g. a
+        // navigation timeout fired) while this event is in flight, continue()
+        // rejects, and an unhandled rejection would kill the whole process.
+        req.continue().catch(() => {});
         return;
       }
       try {

@@ -42,7 +42,10 @@ export async function renderPdf(html) {
         req.isNavigationRequest() &&
         req.url() === 'about:blank';
       if (isMainBootstrap || req.url().startsWith('data:')) {
-        req.continue();
+        // Guarded like the abort path below: if the browser is torn down while
+        // this event is in flight, continue() rejects, and an unhandled
+        // rejection would kill the whole process.
+        req.continue().catch(() => {});
         return;
       }
       req.abort('blockedbyclient').catch(() => {});
