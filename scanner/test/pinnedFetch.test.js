@@ -73,3 +73,24 @@ test('rejects a decompression bomb even when the compressed body is tiny', async
     server.close();
   }
 });
+
+test('caps a slow-drip response with the total deadline', async () => {
+  // Send a byte every 2s and never end: this keeps resetting the 20s idle
+  // socket timeout, so only the total deadline can stop it. The deadline is
+  // 30s; assert it rejects well before an unbounded stream would (the test
+  // timeout is 40s).
+  let timer;
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain', 'transfer-encoding': 'chunked' });
+    timer = setInterval(() => res.write('.'), 2000);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    await expect(fetchPinned(`http://accessguard-pin-test.invalid:${port}/drip`, '127.0.0.1')).rejects.toThrow('deadline_exceeded');
+  } finally {
+    clearInterval(timer);
+    server.close();
+  }
+}, 40000);

@@ -6,7 +6,12 @@ const MAX_BODY_BYTES = 10 * 1024 * 1024;
 // The wire cap above counts *compressed* bytes; a small gzip/brotli bomb can
 // expand to gigabytes, so decompression needs its own output ceiling.
 const MAX_DECODED_BYTES = 50 * 1024 * 1024;
+// Idle-socket timeout: fires when a connection goes quiet.
 const REQUEST_TIMEOUT_MS = 20000;
+// Total deadline: caps a server that dribbles bytes just often enough to keep
+// resetting the idle timeout, which would otherwise hold a scan open for far
+// longer than REQUEST_TIMEOUT_MS.
+const REQUEST_DEADLINE_MS = 30000;
 
 // Hop-by-hop headers that must not be replayed into the browser's response.
 const STRIP_RESPONSE_HEADERS = new Set([
@@ -62,6 +67,11 @@ export function fetchPinned(rawUrl, ip, { method = 'GET', headers = {}, body = n
   }
 
   return new Promise((resolve, reject) => {
+    let deadline;
+    const done = (fn, arg) => {
+      clearTimeout(deadline);
+      fn(arg);
+    };
     const req = lib.request(options, (res) => {
       const chunks = [];
       let size = 0;
@@ -84,15 +94,16 @@ export function fetchPinned(rawUrl, ip, { method = 'GET', headers = {}, body = n
           const raw = Buffer.concat(chunks);
           const decoded = decodeBody(raw, responseHeaders['content-encoding']);
           delete responseHeaders['content-encoding'];
-          resolve({ status: res.statusCode, headers: responseHeaders, body: decoded });
+          done(resolve, { status: res.statusCode, headers: responseHeaders, body: decoded });
         } catch (err) {
-          reject(err);
+          done(reject, err);
         }
       });
-      res.on('error', reject);
+      res.on('error', (err) => done(reject, err));
     });
+    deadline = setTimeout(() => req.destroy(new Error('deadline_exceeded')), REQUEST_DEADLINE_MS);
     req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error('timeout')));
-    req.on('error', reject);
+    req.on('error', (err) => done(reject, err));
     if (body) {
       req.write(body);
     }

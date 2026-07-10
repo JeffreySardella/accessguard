@@ -11,6 +11,9 @@ services:
     # Restart on crash: a scan-time failure must not leave the service dead
     # (the Dockerfile HEALTHCHECK makes a wedged container visible too).
     restart: unless-stopped
+    # Run an init (tini) as PID 1 so exited Chromium subprocesses are reaped
+    # instead of accumulating as zombies. Recommended for production too.
+    init: true
     expose:
       - "3000"
     environment:
