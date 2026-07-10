@@ -176,6 +176,36 @@ class ScanWorkerTest extends KernelTestBase {
   }
 
   /**
+   * Tests that a configured scan base URL replaces the generated origin.
+   *
+   * CLI queue processing (drush queue:run, CLI cron) otherwise produces
+   * http://default/... URLs, and containerized scanners often reach the site
+   * under an internal hostname.
+   */
+  public function testScanBaseUrlOverridesOrigin(): void {
+    \Drupal::configFactory()->getEditable('accessguard.settings')
+      ->set('scan_base_url', 'http://web:8080')
+      ->save();
+    $node = Node::create(['type' => 'page', 'title' => 'draft', 'status' => 0]);
+    $node->save();
+    $captured = NULL;
+    $runner = $this->mockRunner();
+    $runner->method('scan')->willReturnCallback(function (string $url) use (&$captured) {
+      $captured = $url;
+      return ['url' => $url, 'violations' => []];
+    });
+
+    $this->createWorker()->processItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
+
+    $this->assertIsString($captured);
+    $this->assertStringStartsWith('http://web:8080/', $captured);
+    // The access token survives the origin swap.
+    $query = [];
+    parse_str((string) parse_url($captured, PHP_URL_QUERY), $query);
+    $this->assertTrue(\Drupal::service('accessguard.scan_access_token')->validate((int) $node->id(), $query['accessguard-scan-token'] ?? ''));
+  }
+
+  /**
    * Tests that a deleted node's queue item is skipped without a scan.
    */
   public function testMissingNodeIsSkipped(): void {

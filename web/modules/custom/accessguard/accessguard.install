@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for AccessGuard.
+ */
+
+/**
+ * Implements hook_uninstall().
+ *
+ * Entity tables and config are removed by core; clean up what is not: the
+ * cron dedup marker in state and any queued scan jobs.
+ */
+function accessguard_uninstall() {
+  \Drupal::state()->delete('accessguard.cron_enqueued');
+  \Drupal::queue('accessguard_scan_queue')->deleteQueue();
+}

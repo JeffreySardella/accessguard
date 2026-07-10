@@ -7,6 +7,7 @@ use Drupal\accessguard\Repository\ScanRepository;
 use Drupal\accessguard\Service\PdfClient;
 use Drupal\accessguard\Service\RegressionService;
 use Drupal\accessguard\Service\ReportHtmlBuilder;
+use Drupal\accessguard\Service\ViolationAnalytics;
 use Drupal\accessguard\Service\WaiverMatcher;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Controller\ControllerBase;
@@ -32,6 +33,7 @@ class DashboardController extends ControllerBase {
     protected WaiverMatcher $waiverMatcher,
     protected ReportHtmlBuilder $reportHtmlBuilder,
     protected PdfClient $pdfClient,
+    protected ViolationAnalytics $violationAnalytics,
   ) {}
 
   /**
@@ -46,6 +48,7 @@ class DashboardController extends ControllerBase {
       $container->get('accessguard.waiver_matcher'),
       $container->get('accessguard.report_html_builder'),
       $container->get('accessguard.pdf_client'),
+      $container->get('accessguard.violation_analytics'),
     );
   }
 
@@ -53,53 +56,62 @@ class DashboardController extends ControllerBase {
    * Builds the overview: summary + per-page latest-scan table.
    */
   public function overview() {
-    $scanStorage = $this->entityTypeManagerService->getStorage('accessguard_scan');
     $nodeStorage = $this->entityTypeManagerService->getStorage('node');
 
-    // Load only the latest scan per node (not every scan ever run).
-    $latestIds = $this->scanRepository->latestScanIdByNode();
-    $latest = [];
-    foreach ($scanStorage->loadMultiple(array_values($latestIds)) as $scan) {
-      $latest[(int) $scan->get('target_entity_id')->value] = $scan;
-    }
+    // Per-page open/waived counts from the shared analytics context, so the
+    // overview agrees with the gate, the analytics tabs, and the PDF summary
+    // (raw stored scan counts would include waived violations and hide
+    // unknown-impact ones). Node access is already applied there.
+    $pages = $this->violationAnalytics->byPage();
 
-    $totals = ['critical' => 0, 'serious' => 0, 'moderate' => 0, 'minor' => 0];
+    $totals = [
+      'open' => 0,
+      'critical' => 0,
+      'serious' => 0,
+      'moderate' => 0,
+      'minor' => 0,
+      'unknown' => 0,
+      'waived' => 0,
+    ];
     $rows = [];
-    foreach ($latest as $nid => $scan) {
+    foreach ($pages as $nid => $page) {
       $node = $nodeStorage->load($nid);
-      // Node-level access applies to the report too: don't leak titles or
-      // violation counts of content the viewer cannot see.
-      if (!$node || !$node->access('view')) {
+      if (!$node) {
         continue;
       }
-      foreach ($totals as $sev => $_) {
-        $totals[$sev] += (int) $scan->get('count_' . $sev)->value;
+      foreach ($totals as $key => $_) {
+        $totals[$key] += $page[$key];
       }
       $rows[] = [
         Link::fromTextAndUrl($node->label(), Url::fromRoute('accessguard.node_detail', ['node' => $nid])),
-        $this->dateFormatter->format((int) $scan->get('created')->value, 'short'),
-        (int) $scan->get('count_critical')->value,
-        (int) $scan->get('count_serious')->value,
-        (int) $scan->get('count_moderate')->value,
-        (int) $scan->get('count_minor')->value,
+        $this->dateFormatter->format($page['created'], 'short'),
+        $page['open'],
+        $page['critical'],
+        $page['serious'],
+        $page['moderate'],
+        $page['minor'],
+        $page['waived'],
       ];
     }
 
-    $totalViolations = array_sum($totals);
-
+    $severityLine = $this->t('Critical: @c, Serious: @s, Moderate: @m, Minor: @mi', [
+      '@c' => $totals['critical'],
+      '@s' => $totals['serious'],
+      '@m' => $totals['moderate'],
+      '@mi' => $totals['minor'],
+    ]);
+    if ($totals['unknown'] > 0) {
+      $severityLine = $this->t('@line, Unknown severity: @u', ['@line' => $severityLine, '@u' => $totals['unknown']]);
+    }
     $build = [];
     $build['summary'] = [
       '#theme' => 'item_list',
       '#title' => $this->t('Compliance summary'),
       '#items' => [
         $this->t('Pages scanned: @n', ['@n' => count($rows)]),
-        $this->t('Total violations (latest scans): @n', ['@n' => $totalViolations]),
-        $this->t('Critical: @c, Serious: @s, Moderate: @m, Minor: @mi', [
-          '@c' => $totals['critical'],
-          '@s' => $totals['serious'],
-          '@m' => $totals['moderate'],
-          '@mi' => $totals['minor'],
-        ]),
+        $this->t('Open violations (latest scans): @n', ['@n' => $totals['open']]),
+        $severityLine,
+        $this->t('Waived: @n', ['@n' => $totals['waived']]),
       ],
     ];
     $build['table'] = [
@@ -107,10 +119,12 @@ class DashboardController extends ControllerBase {
       '#header' => [
         $this->t('Page'),
         $this->t('Last scan'),
+        $this->t('Open'),
         $this->t('Critical'),
         $this->t('Serious'),
         $this->t('Moderate'),
         $this->t('Minor'),
+        $this->t('Waived'),
       ],
       '#rows' => $rows,
       '#empty' => $this->t('No scans yet. Run: drush accessguard:scan <nid> --now'),
@@ -242,6 +256,9 @@ class DashboardController extends ControllerBase {
       ->condition('target_entity_type', 'node')
       ->condition('target_entity_id', $nid)
       ->sort('created', 'DESC')
+      // Id tie-breaker: same-second scans would otherwise interleave
+      // nondeterministically across pager pages.
+      ->sort('id', 'DESC')
       ->pager(25)
       ->execute();
 

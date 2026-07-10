@@ -7,7 +7,7 @@ services:
     arguments: ['@http_client', '@config.factory']
   accessguard.scan_access_token:
     class: Drupal\accessguard\Service\ScanAccessToken
-    arguments: ['@private_key', '@datetime.time']
+    arguments: ['@private_key', '@datetime.time', '@config.factory']
   accessguard.scan_recorder:
     class: Drupal\accessguard\Service\ScanRecorder
     arguments: ['@entity_type.manager', '@database']

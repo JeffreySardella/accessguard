@@ -8,6 +8,9 @@ accessguard.settings:
     scanner_auth_token:
       type: string
       label: 'Scanner service shared-secret token'
+    scan_base_url:
+      type: string
+      label: 'Base URL the scanner uses to reach this site (empty = site default)'
     gate_enabled:
       type: boolean
       label: 'Enable publish gating'

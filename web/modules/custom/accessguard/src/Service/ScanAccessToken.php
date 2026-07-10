@@ -4,6 +4,7 @@ namespace Drupal\accessguard\Service;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Utility\Crypt;
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\PrivateKey;
 use Drupal\Core\Site\Settings;
 use Drupal\node\NodeInterface;
@@ -41,6 +42,7 @@ class ScanAccessToken {
   public function __construct(
     protected PrivateKey $privateKey,
     protected TimeInterface $time,
+    protected ConfigFactoryInterface $configFactory,
   ) {}
 
   /**
@@ -48,13 +50,24 @@ class ScanAccessToken {
    *
    * Published nodes get their plain canonical URL. Unpublished nodes get a
    * token appended so the scan sees the real content instead of a 403 page.
+   *
+   * When scan_base_url is configured, that origin replaces the one Drupal
+   * generates. Without it, CLI contexts (drush queue:run, CLI cron) produce
+   * http://default/... URLs the scanner cannot fetch, and containerized
+   * scanners often need an internal hostname distinct from the public one.
    */
   public function buildScanUrl(NodeInterface $node): string {
     $options = ['absolute' => TRUE];
     if (!$node->isPublished()) {
       $options['query'][self::QUERY_KEY] = $this->generate((int) $node->id());
     }
-    return $node->toUrl('canonical', $options)->toString();
+    $url = $node->toUrl('canonical', $options)->toString();
+    $base = rtrim((string) $this->configFactory->get('accessguard.settings')->get('scan_base_url'), '/');
+    if ($base !== '') {
+      $parts = parse_url($url);
+      $url = $base . ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+    }
+    return $url;
   }
 
   /**

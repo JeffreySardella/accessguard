@@ -40,6 +40,20 @@ class PdfClientTest extends UnitTestCase {
   }
 
   /**
+   * Tests that a 200 response that is not a PDF throws.
+   *
+   * A misconfigured endpoint answering 200 with HTML/JSON must hit the
+   * error path, not become a corrupt .pdf download.
+   */
+  public function testNonPdfBodyThrows(): void {
+    $mock = new MockHandler([new Response(200, ['Content-Type' => 'text/html'], '<html lang="en">not a pdf</html>')]);
+    $client = new Client(['handler' => HandlerStack::create($mock)]);
+    $config = $this->getConfigFactoryStub(['accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000']]);
+    $this->expectException(\RuntimeException::class);
+    (new PdfClient($client, $config))->render('<h1>x</h1>');
+  }
+
+  /**
    * Tests an HTTP error throws.
    */
   public function testHttpErrorThrows(): void {

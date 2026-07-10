@@ -59,7 +59,11 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       return;
     }
 
-    $rank = ['minor' => 1, 'moderate' => 2, 'serious' => 3, 'critical' => 4];
+    // axe-core can return a null impact; ScanRecorder stores it as 'unknown'.
+    // Rank unknown alongside moderate so it is gateable (at a moderate or
+    // minor threshold) instead of invisibly passing every gate — an
+    // unrankable violation should not be weaker than the weakest known rank.
+    $rank = ['minor' => 1, 'moderate' => 2, 'unknown' => 2, 'serious' => 3, 'critical' => 4];
     $thresholdName = $config->get('gate_threshold') ?: 'critical';
     $threshold = $rank[$thresholdName] ?? 4;
 

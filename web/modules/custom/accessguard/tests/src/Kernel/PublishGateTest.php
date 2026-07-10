@@ -65,6 +65,26 @@ class PublishGateTest extends KernelTestBase {
   }
 
   /**
+   * Creates a completed scan whose violations carry the given impacts.
+   */
+  private function makeScanWithImpacts(int $nid, array $impacts): void {
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $nid,
+      'status' => 'complete',
+    ]);
+    $scan->save();
+    foreach ($impacts as $i => $impact) {
+      \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+        'scan_id' => $scan->id(),
+        'rule_id' => 'rule-' . $i,
+        'impact' => $impact,
+        'selector' => '.sel-' . $i,
+      ])->save();
+    }
+  }
+
+  /**
    * Counts the publish-gate constraint violations reported for a node.
    */
   private function countGateViolations(Node $node): int {
@@ -137,6 +157,50 @@ class PublishGateTest extends KernelTestBase {
     $this->makeScan((int) $node->id(), 1);
     $node->setPublished();
     $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  /**
+   * Tests the severity-threshold ranking, not just the default 'critical'.
+   *
+   * A 'serious' threshold must block serious (and critical) violations while
+   * letting moderate ones publish — the ranking arithmetic is what makes the
+   * gate's central setting mean anything.
+   */
+  public function testThresholdRankingBlocksAtAndAboveOnly(): void {
+    \Drupal::configFactory()->getEditable('accessguard.settings')->set('gate_threshold', 'serious')->save();
+
+    $moderate = Node::create(['type' => 'page', 'title' => 'moderate only', 'status' => 0]);
+    $moderate->save();
+    $this->makeScanWithImpacts((int) $moderate->id(), ['moderate', 'minor']);
+    $moderate->setPublished();
+    $this->assertSame(0, $this->countGateViolations($moderate));
+
+    $serious = Node::create(['type' => 'page', 'title' => 'has serious', 'status' => 0]);
+    $serious->save();
+    $this->makeScanWithImpacts((int) $serious->id(), ['moderate', 'serious']);
+    $serious->setPublished();
+    $this->assertSame(1, $this->countGateViolations($serious));
+  }
+
+  /**
+   * Tests that unknown-impact violations are gateable, not invisible.
+   *
+   * The axe engine can return a null impact (stored as 'unknown'); it ranks
+   * alongside moderate so it blocks at a moderate threshold but not at the
+   * default critical one.
+   */
+  public function testUnknownImpactRanksAsModerate(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'unknown impact', 'status' => 0]);
+    $node->save();
+    $this->makeScanWithImpacts((int) $node->id(), ['unknown']);
+
+    // Default threshold (critical): unknown does not block.
+    $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+
+    // Moderate threshold: unknown blocks like a moderate violation would.
+    \Drupal::configFactory()->getEditable('accessguard.settings')->set('gate_threshold', 'moderate')->save();
+    $this->assertSame(1, $this->countGateViolations($node));
   }
 
   /**

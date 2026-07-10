@@ -49,6 +49,13 @@ function _accessguard_enqueue_scan(NodeInterface $node) {
     return;
   }
   \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
+  // Record the enqueue in cron's dedup marker too, so a cron run right after
+  // a save doesn't enqueue the same (stale-looking) node a second time while
+  // the save-triggered scan is still waiting in the queue.
+  $state = \Drupal::state();
+  $pending = $state->get('accessguard.cron_enqueued', []);
+  $pending[(int) $node->id()] = \Drupal::time()->getRequestTime();
+  $state->set('accessguard.cron_enqueued', $pending);
 }
 
 /**

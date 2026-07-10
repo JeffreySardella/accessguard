@@ -18,7 +18,7 @@ class ViolationAnalytics {
   /**
    * Memoized per-node context, built on first call to accessibleScans().
    *
-   * @var array<int, array{nid:int, author_uid:?int, violations:array, waived:array<string,string>}>|null
+   * @var array<int, array{nid:int, created:int, author_uid:?int, violations:array, waived:array<string,string>}>|null
    */
   protected ?array $scanContextCache = NULL;
 
@@ -118,6 +118,46 @@ class ViolationAnalytics {
   }
 
   /**
+   * Latest-scan per-page open/waived counts, keyed by node id.
+   *
+   * This is the dashboard overview's data source, so the overview shows the
+   * same open-vs-waived numbers as the gate, the analytics tabs, and the PDF
+   * summary — not the raw stored per-scan counts (which include waived
+   * violations and omit unknown-impact ones).
+   *
+   * @return array<int, array{nid:int, created:int, open:int, critical:int, serious:int, moderate:int, minor:int, unknown:int, waived:int}>
+   *   Per-node counts for each latest scan the current user may view.
+   */
+  public function byPage(): array {
+    $pages = [];
+    foreach ($this->accessibleScans() as $ctx) {
+      $row = [
+        'nid' => $ctx['nid'],
+        'created' => $ctx['created'],
+        'open' => 0,
+        'critical' => 0,
+        'serious' => 0,
+        'moderate' => 0,
+        'minor' => 0,
+        'unknown' => 0,
+        'waived' => 0,
+      ];
+      foreach ($ctx['violations'] as $v) {
+        $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
+        if (isset($ctx['waived'][$fp])) {
+          $row['waived']++;
+          continue;
+        }
+        $row['open']++;
+        $impact = (string) $v->get('impact')->value;
+        $row[isset($row[$impact]) ? $impact : 'unknown']++;
+      }
+      $pages[$ctx['nid']] = $row;
+    }
+    return $pages;
+  }
+
+  /**
    * Open-violation totals across accessible nodes.
    *
    * @return array{pages:int, open:int, critical:int, serious:int, moderate:int, minor:int}
@@ -149,7 +189,7 @@ class ViolationAnalytics {
    * $scanContextCache, since the underlying node/violation/waiver lookups
    * are identical on every call within the same request.
    *
-   * @return \Generator<array{nid:int, author_uid:?int, violations:array, waived:array<string,string>}>
+   * @return \Generator<array{nid:int, created:int, author_uid:?int, violations:array, waived:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   protected function accessibleScans(): \Generator {
@@ -159,7 +199,7 @@ class ViolationAnalytics {
   /**
    * Builds the per-node context for each latest scan the current user may view.
    *
-   * @return array<int, array{nid:int, author_uid:?int, violations:array, waived:array<string,string>}>
+   * @return array<int, array{nid:int, created:int, author_uid:?int, violations:array, waived:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   protected function buildScanContext(): array {
@@ -179,6 +219,7 @@ class ViolationAnalytics {
       $violations = $violationStorage->loadByProperties(['scan_id' => $scan->id()]);
       $context[] = [
         'nid' => $nid,
+        'created' => (int) $scan->get('created')->value,
         'author_uid' => $scan->get('content_author')->target_id ? (int) $scan->get('content_author')->target_id : NULL,
         'violations' => $violations,
         'waived' => $this->waiverMatcher->waivedFingerprints($nid),
