@@ -52,3 +52,24 @@ test('decompresses a gzip response so the browser gets plain bytes', async () =>
   expect(res.body.toString()).toBe('compressed payload');
   expect(res.headers['content-encoding']).toBeUndefined();
 });
+
+test('rejects a decompression bomb even when the compressed body is tiny', async () => {
+  const { gzipSync } = await import('node:zlib');
+  // 60 MB of zeros gzips to ~60 KB — far under the 10 MB wire cap, far over
+  // the decoded-output ceiling. Without that ceiling this expands in memory
+  // and can OOM the service.
+  const bomb = gzipSync(Buffer.alloc(60 * 1024 * 1024));
+  expect(bomb.length).toBeLessThan(10 * 1024 * 1024);
+  const server = http.createServer((req, res) => {
+    res.setHeader('content-encoding', 'gzip');
+    res.end(bomb);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    await expect(fetchPinned(`http://accessguard-pin-test.invalid:${port}/bomb`, '127.0.0.1')).rejects.toThrow();
+  } finally {
+    server.close();
+  }
+});

@@ -3,6 +3,9 @@ import https from 'node:https';
 import zlib from 'node:zlib';
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024;
+// The wire cap above counts *compressed* bytes; a small gzip/brotli bomb can
+// expand to gigabytes, so decompression needs its own output ceiling.
+const MAX_DECODED_BYTES = 50 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 20000;
 
 // Hop-by-hop headers that must not be replayed into the browser's response.
@@ -17,11 +20,11 @@ function decodeBody(body, encoding) {
     case 'identity':
       return body;
     case 'gzip':
-      return zlib.gunzipSync(body);
+      return zlib.gunzipSync(body, { maxOutputLength: MAX_DECODED_BYTES });
     case 'deflate':
-      return zlib.inflateSync(body);
+      return zlib.inflateSync(body, { maxOutputLength: MAX_DECODED_BYTES });
     case 'br':
-      return zlib.brotliDecompressSync(body);
+      return zlib.brotliDecompressSync(body, { maxOutputLength: MAX_DECODED_BYTES });
     default:
       throw new Error(`unsupported_content_encoding: ${encoding}`);
   }

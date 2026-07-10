@@ -48,6 +48,73 @@ test('scans an http target end-to-end, fetching subresources through the pinned 
   }
 }, 30000);
 
+test('scans a busy page that never reaches network idle', async () => {
+  // Long-polling/analytics-style pages never settle to networkidle0; the
+  // scanner must still scan them once the DOM has loaded.
+  const html = readFileSync(fixturePath, 'utf8')
+    .replace('</body>', '<script>setInterval(() => fetch("/ping").catch(() => {}), 300);</script></body>');
+  const server = http.createServer((req, res) => {
+    if (req.url === '/ping') {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+    res.setHeader('content-type', 'text/html');
+    res.end(html);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  process.env.SCANNER_ALLOW_PRIVATE = '1';
+  try {
+    const result = await runScan(`http://127.0.0.1:${port}/`);
+    expect(result.violations.map(v => v.ruleId)).toContain('image-alt');
+  } finally {
+    delete process.env.SCANNER_ALLOW_PRIVATE;
+    server.close();
+  }
+}, 45000);
+
+test('refuses to scan a non-2xx target, with a distinguishable error', async () => {
+  const server = http.createServer((req, res) => {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/html');
+    res.end('<html lang="en"><head><title>404</title></head><body>not here</body></html>');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  process.env.SCANNER_ALLOW_PRIVATE = '1';
+  try {
+    await expect(runScan(`http://127.0.0.1:${port}/gone`)).rejects.toMatchObject({
+      code: 'target_http_error',
+      status: 404,
+    });
+  } finally {
+    delete process.env.SCANNER_ALLOW_PRIVATE;
+    server.close();
+  }
+}, 45000);
+
+test('refuses to scan a non-HTML target, with a distinguishable error', async () => {
+  const server = http.createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end('{"not": "a web page"}');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  process.env.SCANNER_ALLOW_PRIVATE = '1';
+  try {
+    await expect(runScan(`http://127.0.0.1:${port}/api`)).rejects.toMatchObject({
+      code: 'target_not_html',
+    });
+  } finally {
+    delete process.env.SCANNER_ALLOW_PRIVATE;
+    server.close();
+  }
+}, 45000);
+
 test('POST /scan requires the token when SCANNER_AUTH_TOKEN is set', async () => {
   process.env.SCANNER_AUTH_TOKEN = 'sekret';
   const server = http.createServer(app).listen(0);

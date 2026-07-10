@@ -1,4 +1,4 @@
-FROM ghcr.io/puppeteer/puppeteer:23.0.0
+FROM ghcr.io/puppeteer/puppeteer:25.3.0
 WORKDIR /app
 # npm ci against the committed lockfile, so image builds are reproducible
 # instead of re-resolving caret ranges on every build.

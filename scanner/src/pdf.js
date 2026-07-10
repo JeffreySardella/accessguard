@@ -55,6 +55,9 @@ export async function renderPdf(html) {
       format: 'A4',
       printBackground: true,
       margin: { top: '1cm', bottom: '1cm', left: '1cm', right: '1cm' },
+      // Explicit render deadline so a pathological report can't hold a full
+      // Chromium beyond it.
+      timeout: 60000,
     });
     return Buffer.from(pdf);
   } finally {

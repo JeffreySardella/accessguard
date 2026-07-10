@@ -58,14 +58,25 @@ app.post('/scan', withBrowserSlot(async (req, res) => {
   }
   try {
     await assertUrlAllowed(url);
-  } catch {
-    return res.status(400).json({ error: 'url_not_allowed' });
+  } catch (err) {
+    // A hostname that simply doesn't resolve is a typo, not a policy block;
+    // reporting it as url_not_allowed sends operators down the wrong path.
+    const code = err && err.code === 'ENOTFOUND' ? 'host_not_found' : 'url_not_allowed';
+    return res.status(400).json({ error: code });
   }
   try {
     const result = await runScan(url);
     res.json(result);
   } catch (err) {
     console.error('[accessguard-scanner] scan failed:', err);
+    // Target-side failures (the page is broken/slow/not HTML) get 502 with a
+    // specific code, so the client can tell them from scanner-internal
+    // failures (500) and shed load (503). "Fix the page" vs "fix the
+    // scanner" are different on-call pages.
+    const targetCodes = ['target_http_error', 'target_not_html', 'navigation_timeout', 'axe_timeout'];
+    if (err && targetCodes.includes(err.code)) {
+      return res.status(502).json({ error: err.code, ...(err.status ? { status: err.status } : {}) });
+    }
     res.status(500).json({ error: 'scan_failed' });
   }
 }));
