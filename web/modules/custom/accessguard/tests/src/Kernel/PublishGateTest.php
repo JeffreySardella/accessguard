@@ -140,6 +140,31 @@ class PublishGateTest extends KernelTestBase {
   }
 
   /**
+   * Tests the unpublish → fix → re-scan → republish path.
+   *
+   * Regression test for the gate deadlock: a node unpublished with a failing
+   * scan is blocked from republishing, but once a newer clean scan is
+   * recorded (draft saves enqueue scans, and the worker scans unpublished
+   * nodes with an access token), the gate opens again.
+   */
+  public function testCleanRescanUnblocksRepublish(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'was bad', 'status' => 1]);
+    $node->save();
+    $this->makeScan((int) $node->id(), 1);
+
+    // Unpublish, then try to republish: the stale failing scan blocks it.
+    $node->setUnpublished();
+    $node->save();
+    $node->setPublished();
+    $this->assertSame(1, $this->countGateViolations($node));
+
+    // The editor fixes the content and a re-scan of the draft comes back
+    // clean. Recording it must unblock the publish transition.
+    $this->makeScan((int) $node->id(), 0);
+    $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  /**
    * Tests that a waived violation no longer blocks publishing.
    */
   public function testWaivedViolationDoesNotBlockPublish(): void {

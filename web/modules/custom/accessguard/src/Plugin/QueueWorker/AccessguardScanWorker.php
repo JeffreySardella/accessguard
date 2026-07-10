@@ -2,12 +2,14 @@
 
 namespace Drupal\accessguard\Plugin\QueueWorker;
 
+use Drupal\accessguard\Service\ScanAccessToken;
 use Drupal\accessguard\Service\ScanRecorder;
 use Drupal\accessguard\Service\ScanRunner;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Queue\Attribute\QueueWorker;
+use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Core\Queue\SuspendQueueException;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
@@ -23,6 +25,11 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 )]
 class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
 
+  /**
+   * Total tries per item before it is dropped with an error log.
+   */
+  public const MAX_ATTEMPTS = 3;
+
   public function __construct(
     array $configuration,
     $plugin_id,
@@ -30,6 +37,8 @@ class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryP
     protected EntityTypeManagerInterface $entityTypeManager,
     protected ScanRunner $scanRunner,
     protected ScanRecorder $scanRecorder,
+    protected ScanAccessToken $scanAccessToken,
+    protected QueueFactory $queueFactory,
     protected LoggerChannelFactoryInterface $loggerFactory,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
@@ -41,7 +50,7 @@ class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryP
   public static function create(ContainerInterface $c, array $configuration, $plugin_id, $plugin_definition) {
     return new static($configuration, $plugin_id, $plugin_definition,
       $c->get('entity_type.manager'), $c->get('accessguard.scan_runner'), $c->get('accessguard.scan_recorder'),
-      $c->get('logger.factory'));
+      $c->get('accessguard.scan_access_token'), $c->get('queue'), $c->get('logger.factory'));
   }
 
   /**
@@ -52,24 +61,64 @@ class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryP
     if (!$node) {
       return;
     }
-    $url = $node->toUrl('canonical', ['absolute' => TRUE])->toString();
+    // Unpublished nodes get a signed access token appended so the scanner
+    // sees the real content instead of the site's 403 page. Recording a 403
+    // page as a node's scan would corrupt compliance data either way: its
+    // violations aren't the node's, and a *clean* 403 page would wrongly
+    // clear the publish gate.
+    $url = $this->scanAccessToken->buildScanUrl($node);
     $author = (int) $node->getOwnerId();
 
     try {
       $result = $this->scanRunner->scan($url);
     }
     catch (\RuntimeException $e) {
-      // The scanner is unreachable or erroring. Log it and suspend the queue
-      // for this run so the item stays queued and is retried next cron, rather
-      // than churning through and re-failing every item against a down service.
-      $this->loggerFactory->get('accessguard')->warning('Scan failed for node @nid: @msg', [
-        '@nid' => $node->id(),
+      $this->handleFailure(is_array($data) ? $data : [], $e);
+      return;
+    }
+
+    $this->scanRecorder->record('node', (int) $node->id(), $author, $data['trigger'] ?? 'cron', $result);
+  }
+
+  /**
+   * Routes a scan failure to queue suspension or bounded per-item retry.
+   *
+   * A blanket SuspendQueueException on every failure would let one
+   * permanently failing page sit at the head of the FIFO queue and block
+   * every other node's scan forever. So: probe the scanner's /health
+   * endpoint. Service down → suspend the whole queue (the item stays queued
+   * and everything retries next cron). Service healthy → the failure is
+   * specific to this item; re-enqueue it a bounded number of times, then
+   * drop it with an error log.
+   */
+  protected function handleFailure(array $data, \RuntimeException $e): void {
+    $logger = $this->loggerFactory->get('accessguard');
+    $nid = $data['nid'] ?? NULL;
+
+    if (!$this->scanRunner->isHealthy()) {
+      $logger->warning('Scanner unreachable while scanning node @nid; suspending the scan queue until next cron. @msg', [
+        '@nid' => $nid,
         '@msg' => $e->getMessage(),
       ]);
       throw new SuspendQueueException($e->getMessage(), 0, $e);
     }
 
-    $this->scanRecorder->record('node', (int) $node->id(), $author, $data['trigger'] ?? 'cron', $result);
+    $attempts = ((int) ($data['attempts'] ?? 0)) + 1;
+    if ($attempts < self::MAX_ATTEMPTS) {
+      $this->queueFactory->get('accessguard_scan_queue')->createItem(['attempts' => $attempts] + $data);
+      $logger->warning('Scan failed for node @nid (attempt @attempt of @max); requeued. @msg', [
+        '@nid' => $nid,
+        '@attempt' => $attempts,
+        '@max' => self::MAX_ATTEMPTS,
+        '@msg' => $e->getMessage(),
+      ]);
+      return;
+    }
+    $logger->error('Scan failed for node @nid after @max attempts; giving up on this item. @msg', [
+      '@nid' => $nid,
+      '@max' => self::MAX_ATTEMPTS,
+      '@msg' => $e->getMessage(),
+    ]);
   }
 
 }

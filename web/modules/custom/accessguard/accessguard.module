@@ -5,6 +5,9 @@
  * AccessGuard module hooks.
  */
 
+use Drupal\accessguard\Service\ScanAccessToken;
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\node\NodeInterface;
 
 /**
@@ -20,30 +23,68 @@ function accessguard_entity_type_alter(array &$entity_types) {
  * Implements hook_ENTITY_TYPE_insert() for nodes.
  */
 function accessguard_node_insert(NodeInterface $node) {
-  _accessguard_enqueue_if_published($node);
+  _accessguard_enqueue_scan($node);
 }
 
 /**
  * Implements hook_ENTITY_TYPE_update() for nodes.
  */
 function accessguard_node_update(NodeInterface $node) {
-  _accessguard_enqueue_if_published($node);
+  _accessguard_enqueue_scan($node);
 }
 
 /**
- * Enqueues a scan for a node when it is published.
+ * Enqueues a scan for a saved node.
  *
  * This is what makes a save trigger a re-scan, so violation data tracks the
  * content as it changes (and, with the publish gate, keeps the dashboard
- * current after an editor fixes an issue).
+ * current after an editor fixes an issue). Unpublished nodes are enqueued
+ * too — the queue worker scans them with a signed access token — because the
+ * publish gate reads the node's latest scan: without draft re-scans, a node
+ * unpublished with violations could never record the clean scan it needs to
+ * be publishable again.
  */
-function _accessguard_enqueue_if_published(NodeInterface $node) {
+function _accessguard_enqueue_scan(NodeInterface $node) {
   if (!\Drupal::config('accessguard.settings')->get('rescan_enabled')) {
     return;
   }
-  if ($node->isPublished()) {
-    \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
+  \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_access() for nodes.
+ *
+ * Grants view access when the request carries a valid scan-access token for
+ * this exact node (see ScanAccessToken). This is how the anonymous scanner
+ * client can render unpublished content for a scan instead of receiving the
+ * site's 403 page. The token is HMAC-signed with the site's private key,
+ * bound to the node id, and expires, so it grants nothing beyond "view this
+ * one node for the scan window".
+ */
+function accessguard_node_access(NodeInterface $node, $operation, AccountInterface $account) {
+  if ($operation !== 'view') {
+    return AccessResult::neutral();
   }
+  // The result varies by the token query argument, so any cached access
+  // decision must be keyed on it.
+  $neutral = AccessResult::neutral()->addCacheContexts(['url.query_args:' . ScanAccessToken::QUERY_KEY]);
+  $request = \Drupal::requestStack()->getCurrentRequest();
+  if (!$request) {
+    return $neutral;
+  }
+  // Not query->get(): InputBag::get() throws on a crafted array-valued
+  // parameter (?accessguard-scan-token[]=x), which would 500 the request.
+  $token = $request->query->all()[ScanAccessToken::QUERY_KEY] ?? '';
+  if (!is_string($token) || $token === '') {
+    return $neutral;
+  }
+  if (\Drupal::service('accessguard.scan_access_token')->validate((int) $node->id(), $token)) {
+    // Max-age 0 keeps the token-granted response out of page caches.
+    return AccessResult::allowed()
+      ->addCacheContexts(['url.query_args:' . ScanAccessToken::QUERY_KEY])
+      ->setCacheMaxAge(0);
+  }
+  return $neutral;
 }
 
 /**

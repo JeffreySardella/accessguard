@@ -2,6 +2,7 @@
 
 namespace Drupal\accessguard\Drush\Commands;
 
+use Drupal\accessguard\Service\ScanAccessToken;
 use Drupal\accessguard\Service\ScanRecorder;
 use Drupal\accessguard\Service\ScanRunner;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
@@ -21,6 +22,7 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
     private readonly QueueFactory $queueFactory,
     private readonly ScanRunner $scanRunner,
     private readonly ScanRecorder $scanRecorder,
+    private readonly ScanAccessToken $scanAccessToken,
   ) {
     parent::__construct();
   }
@@ -34,6 +36,7 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
       $container->get('queue'),
       $container->get('accessguard.scan_runner'),
       $container->get('accessguard.scan_recorder'),
+      $container->get('accessguard.scan_access_token'),
     );
   }
 
@@ -53,7 +56,10 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
     if (!$node) {
       throw new \InvalidArgumentException("Node $nid not found.");
     }
-    $url = $node->toUrl('canonical', ['absolute' => TRUE])->toString();
+    // Unpublished nodes get a signed token so the scanner sees the content
+    // rather than a 403 page — this is what makes fix-then-rescan possible
+    // for content the publish gate is holding back.
+    $url = $this->scanAccessToken->buildScanUrl($node);
     $result = $this->scanRunner->scan($url);
     $scan = $this->scanRecorder->record('node', (int) $nid, (int) $node->getOwnerId(), 'manual', $result);
     $this->logger()->success("Scan {$scan->id()}: " .

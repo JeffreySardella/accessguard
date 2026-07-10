@@ -48,4 +48,22 @@ class ScanRunner {
     return $data;
   }
 
+  /**
+   * Probes whether the scanner service itself is up.
+   *
+   * Lets the queue worker tell a service-wide outage (suspend the queue,
+   * retry next cron) apart from a single scan that failed against a healthy
+   * scanner (retry just that item a bounded number of times).
+   */
+  public function isHealthy(): bool {
+    $endpoint = rtrim((string) $this->configFactory->get('accessguard.settings')->get('scanner_endpoint'), '/');
+    try {
+      $response = $this->httpClient->request('GET', $endpoint . '/health', ['timeout' => 5]);
+      return $response->getStatusCode() === 200;
+    }
+    catch (\Throwable) {
+      return FALSE;
+    }
+  }
+
 }

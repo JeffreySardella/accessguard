@@ -5,6 +5,9 @@ services:
   accessguard.pdf_client:
     class: Drupal\accessguard\Service\PdfClient
     arguments: ['@http_client', '@config.factory']
+  accessguard.scan_access_token:
+    class: Drupal\accessguard\Service\ScanAccessToken
+    arguments: ['@private_key', '@datetime.time']
   accessguard.scan_recorder:
     class: Drupal\accessguard\Service\ScanRecorder
     arguments: ['@entity_type.manager', '@database']
