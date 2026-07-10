@@ -18,6 +18,8 @@ The most important problems are **not** in the areas the project already defends
 
 None of these are hard to fix, and the existing test infrastructure makes them safe to fix.
 
+> **Remediation status (2026-07-10):** H1–H5 have been fixed in follow-up commits on this branch (signed scan-access tokens for unpublished content, health-probe-gated queue suspension with bounded per-item retry, a scanner concurrency cap with 503 shedding, guarded `req.continue()` plus an unhandled-rejection backstop, restart policy + container healthcheck). M16 (Dockerfile lockfile bypass) was fixed alongside. H6 (Puppeteer/Chromium upgrade) and the remaining medium/low findings are still open.
+
 ---
 
 ## High-severity findings
