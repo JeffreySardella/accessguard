@@ -20,6 +20,9 @@ export async function renderPdf(html) {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      // Route Chromium shared memory to /tmp; the container's default 64MB
+      // /dev/shm otherwise crashes the renderer on larger reports.
+      '--disable-dev-shm-usage',
       // Belt-and-suspenders: the report needs zero network, so make DNS fail
       // for every host. With the request interception below, this closes the
       // SSRF surface even if a request were to slip past interception.

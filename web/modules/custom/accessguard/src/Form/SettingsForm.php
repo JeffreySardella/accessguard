@@ -137,7 +137,7 @@ class SettingsForm extends ConfigFormBase {
       $config->set('scanner_auth_token', (string) $form_state->getValue('scanner_auth_token'));
     }
     $config
-      ->set('scanner_endpoint', $form_state->getValue('scanner_endpoint'))
+      ->set('scanner_endpoint', trim((string) $form_state->getValue('scanner_endpoint')))
       ->set('scan_base_url', trim((string) $form_state->getValue('scan_base_url')))
       ->set('gate_enabled', (bool) $form_state->getValue('gate_enabled'))
       ->set('gate_threshold', $form_state->getValue('gate_threshold'))

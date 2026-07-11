@@ -51,6 +51,41 @@ test('scans an http target end-to-end, fetching subresources through the pinned 
   }
 }, 30000);
 
+test('caps outbound requests so a page cannot become a DDoS amplifier', async () => {
+  // A page that fires thousands of subresource requests must not be allowed
+  // to flood a target; the scanner caps requests per scan.
+  let served = 0;
+  const html = readFileSync(fixturePath, 'utf8').replace(
+    '</body>',
+    '<script>for (let i = 0; i < 3000; i++) { fetch("/ping/" + i).catch(() => {}); }</script></body>',
+  );
+  const server = http.createServer((req, res) => {
+    if (req.url.startsWith('/ping/')) {
+      served++;
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+    res.setHeader('content-type', 'text/html');
+    res.end(html);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  process.env.SCANNER_ALLOW_PRIVATE = '1';
+  process.env.SCANNER_MAX_REQUESTS = '50';
+  try {
+    await runScan(`http://127.0.0.1:${port}/`);
+    // Far fewer than the 3000 the page attempted — the cap held. Allow slack
+    // for the cap boundary and the navigation/subresource accounting.
+    expect(served).toBeLessThan(200);
+  } finally {
+    delete process.env.SCANNER_ALLOW_PRIVATE;
+    delete process.env.SCANNER_MAX_REQUESTS;
+    server.close();
+  }
+}, 45000);
+
 test('scans a busy page that never reaches network idle', async () => {
   // Long-polling/analytics-style pages never settle to networkidle0; the
   // scanner must still scan them once the DOM has loaded.

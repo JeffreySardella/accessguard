@@ -2,8 +2,10 @@
 
 namespace Drupal\accessguard\Service;
 
+use Drupal\accessguard\Exception\ScannerBusyException;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\RequestException;
 
 /**
  * Calls the Node scanner microservice and returns its decoded response.
@@ -55,6 +57,12 @@ class ScanRunner {
       $data = json_decode((string) $response->getBody(), TRUE, 512, JSON_THROW_ON_ERROR);
     }
     catch (\Throwable $e) {
+      // A 503 is the scanner shedding load at its concurrency cap — transient,
+      // "retry later," not an item failure. Surface it distinctly so the queue
+      // worker suspends rather than burning the item's retry budget.
+      if ($e instanceof RequestException && $e->getResponse() && $e->getResponse()->getStatusCode() === 503) {
+        throw new ScannerBusyException('AccessGuard scanner is at capacity.', 0, $e);
+      }
       throw new \RuntimeException('AccessGuard scan failed: ' . $e->getMessage(), 0, $e);
     }
     // Reject a well-formed-JSON-but-wrong-shape response. Without this a
@@ -76,7 +84,14 @@ class ScanRunner {
   public function isHealthy(): bool {
     $endpoint = rtrim((string) $this->configFactory->get('accessguard.settings')->get('scanner_endpoint'), '/');
     try {
-      $response = $this->httpClient->request('GET', $endpoint . '/health', ['timeout' => 5]);
+      // Probe /ready (not /health): a saturated scanner answers 503 there, so
+      // the worker treats "busy" like "down" — suspend and retry later —
+      // instead of misreading a green liveness check as "scanner is fine, the
+      // item is broken." http_errors is disabled so a 503 returns, not throws.
+      $response = $this->httpClient->request('GET', $endpoint . '/ready', [
+        'timeout' => 5,
+        'http_errors' => FALSE,
+      ]);
       return $response->getStatusCode() === 200;
     }
     catch (\Throwable) {
