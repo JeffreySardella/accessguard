@@ -15,6 +15,9 @@ test('flags an image with no alt text', async () => {
   expect(rules).toContain('image-alt');
   const imgAlt = result.violations.find((v) => v.ruleId === 'image-alt');
   expect(imgAlt.wcagCriterion).toMatch(/^wcag\d{3,}$/);
+  // The axe engine version is reported so the module can detect scans that
+  // span an engine upgrade.
+  expect(result.engineVersion).toMatch(/^\d+\.\d+\.\d+/);
 }, 30000);
 
 test('scans an http target end-to-end, fetching subresources through the pinned path', async () => {

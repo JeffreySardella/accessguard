@@ -56,6 +56,10 @@ class AccessguardScan extends ContentEntityBase {
       ->setLabel(new TranslatableMarkup('Status'))
       ->setDefaultValue('queued');
 
+    $fields['engine_version'] = BaseFieldDefinition::create('string')
+      ->setLabel(new TranslatableMarkup('Engine version'))
+      ->setDescription(new TranslatableMarkup('The axe-core version that produced this scan.'));
+
     foreach (['critical', 'serious', 'moderate', 'minor'] as $sev) {
       $fields['count_' . $sev] = BaseFieldDefinition::create('integer')
         ->setLabel(new TranslatableMarkup('Count @sev', ['@sev' => $sev]))

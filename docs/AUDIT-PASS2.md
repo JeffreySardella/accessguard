@@ -2,6 +2,8 @@
 
 A deeper follow-up to `AUDIT.md`, run after the first-pass remediation merged (PRs #1, #4). Six independent investigators covered ground the first pass didn't: the WCAG-ruleset claim, the tool's own UI accessibility, detection completeness, governance continuity across engine change, a security re-review of the remediation code itself, and supply-chain. Every finding below was verified against the actual code / the installed axe-core 4.12.1.
 
+> **Remediation status (2026-07-11):** Phases 1–2 fixed and merged (PR #5): H-P2-1 (token export leak), M-P2-2 (latest-scan ordering), M-P2-3 (field overflow), L-P2-1 (waiver lock), L-P2-3 (engines.node), and A-P2-1…5 (self-UI accessibility). H-P2-4 (record axe engine version per scan) is now also fixed — the foundational enabler for the cross-version continuity warnings. Still open (need product decisions, tracked): H-P2-2 (record `incomplete`/needs-review results — decide whether they gate), H-P2-3 (scan iframes), H-P2-5 + M-P2-5 (rule-level waivers + cross-version diff warnings), M-P2-1 (iframe/shadow selector delimiter — pairs with H-P2-3), M-P2-4 (SPA settle + viewport policy), and the doc/i18n lows.
+
 Two premises from the investigation briefs were **corrected** during the work and are noted here for honesty:
 - The Puppeteer 23→25 bump does **not** change axe-core — axe-core is a *direct* dependency (`^4.10.0`, currently floated to 4.12.1 via the caret). The engine-drift risk is real but its trigger is the caret float, not the Puppeteer bump.
 - `RegressionService` diffs by `rule_id` **alone**, not `(rule_id, selector)`.

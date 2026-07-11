@@ -52,6 +52,7 @@ class ScanRecorder {
         'triggered_by' => $triggeredBy,
         'content_author' => $authorUid,
         'status' => 'complete',
+        'engine_version' => $this->cap((string) ($scanResult['engineVersion'] ?? '')),
         'count_critical' => $counts['critical'],
         'count_serious' => $counts['serious'],
         'count_moderate' => $counts['moderate'],

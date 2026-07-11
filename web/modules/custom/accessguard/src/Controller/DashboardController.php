@@ -269,12 +269,14 @@ class DashboardController extends ControllerBase {
 
     $historyRows = [];
     foreach ($scanStorage->loadMultiple($ids) as $scan) {
+      $engine = (string) $scan->get('engine_version')->value;
       $historyRows[] = [
         $this->dateFormatter->format((int) $scan->get('created')->value, 'short'),
         (int) $scan->get('count_critical')->value,
         (int) $scan->get('count_serious')->value,
         (int) $scan->get('count_moderate')->value,
         (int) $scan->get('count_minor')->value,
+        $engine !== '' ? $engine : $this->t('—'),
       ];
     }
 
@@ -353,6 +355,7 @@ class DashboardController extends ControllerBase {
         $this->t('Serious'),
         $this->t('Moderate'),
         $this->t('Minor'),
+        $this->t('Engine'),
       ],
       '#rows' => $historyRows,
       '#empty' => $this->t('No scans yet.'),
