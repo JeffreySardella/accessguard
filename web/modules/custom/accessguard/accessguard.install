@@ -5,6 +5,9 @@
  * Install, update and uninstall functions for AccessGuard.
  */
 
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+
 /**
  * Implements hook_uninstall().
  *
@@ -27,4 +30,15 @@ function accessguard_update_10001() {
     $manager->updateEntityType($entity_type);
     $manager->updateFieldStorageDefinition($manager->getFieldStorageDefinition('target_entity_id', $entity_type_id));
   }
+}
+
+/**
+ * Add the engine_version field to accessguard_scan.
+ */
+function accessguard_update_10002() {
+  $manager = \Drupal::entityDefinitionUpdateManager();
+  $definition = BaseFieldDefinition::create('string')
+    ->setLabel(new TranslatableMarkup('Engine version'))
+    ->setDescription(new TranslatableMarkup('The axe-core version that produced this scan.'));
+  $manager->installFieldStorageDefinition('engine_version', 'accessguard_scan', 'accessguard', $definition);
 }

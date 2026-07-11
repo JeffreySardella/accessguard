@@ -67,6 +67,19 @@ class ScanRecorderTest extends KernelTestBase {
   }
 
   /**
+   * Tests that the axe engine version is persisted on the scan.
+   */
+  public function testEngineVersionRecorded(): void {
+    $result = [
+      'url' => 'http://x/node/2',
+      'engineVersion' => '4.12.1',
+      'violations' => [],
+    ];
+    $scan = $this->container->get('accessguard.scan_recorder')->record('node', 2, NULL, 'manual', $result);
+    $this->assertSame('4.12.1', $scan->get('engine_version')->value);
+  }
+
+  /**
    * Tests that the scan-access token is stripped from the stored URL.
    *
    * The token is a live bearer credential; keeping it in the stored URL would

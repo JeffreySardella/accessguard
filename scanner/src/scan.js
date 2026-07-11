@@ -138,7 +138,9 @@ export async function runScan(url) {
     // timeout), long after the Drupal client has given up.
     const axeRun = page.evaluate(async (tags) => {
       const results = await window.axe.run(document, { runOnly: { type: 'tag', values: tags } });
-      return results.violations;
+      // Report the engine version so the module can detect when scans (and
+      // thus waiver/regression continuity) span an axe-core upgrade.
+      return { violations: results.violations, engineVersion: window.axe.version };
     }, TAGS);
     // If the deadline wins, the evaluate rejects later during browser
     // teardown; the no-op catch keeps that from becoming an unhandled
@@ -148,15 +150,15 @@ export async function runScan(url) {
     const deadline = new Promise((unusedResolve, reject) => {
       timer = setTimeout(() => reject(targetError(`axe-core did not finish within ${AXE_TIMEOUT_MS}ms`, 'axe_timeout')), AXE_TIMEOUT_MS);
     });
-    let raw;
+    let axeResult;
     try {
-      raw = await Promise.race([axeRun, deadline]);
+      axeResult = await Promise.race([axeRun, deadline]);
     } finally {
       clearTimeout(timer);
     }
 
     const violations = [];
-    for (const v of raw) {
+    for (const v of axeResult.violations) {
       const wcag = v.tags.find((t) => /^wcag\d{3,}$/.test(t))
         || v.tags.find((t) => /^wcag/.test(t))
         || null;
@@ -171,7 +173,7 @@ export async function runScan(url) {
         });
       }
     }
-    return { url, violations };
+    return { url, violations, engineVersion: axeResult.engineVersion };
   } finally {
     await browser.close();
   }
