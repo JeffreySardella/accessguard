@@ -8,14 +8,26 @@ services:
     build:
       context: ../scanner
       dockerfile: Dockerfile
-    restart: "no"
+    # Restart on crash: a scan-time failure must not leave the service dead
+    # (the Dockerfile HEALTHCHECK makes a wedged container visible too).
+    restart: unless-stopped
+    # Run an init (tini) as PID 1 so exited Chromium subprocesses are reaped
+    # instead of accumulating as zombies. Recommended for production too.
+    init: true
     expose:
       - "3000"
     environment:
       - NODE_ENV=production
-      # Dev/demo: this scanner scans the local Drupal site, which lives on a
-      # private Docker IP. Opt into private targets on trusted networks only.
-      # Leave this OFF in production so the SSRF guard blocks internal hosts.
+      # ⚠ DEV/DEMO ONLY. This file deliberately runs the scanner OPEN
+      # (no SCANNER_AUTH_TOKEN) AND with the SSRF guard relaxed
+      # (SCANNER_ALLOW_PRIVATE=1) so the quick-start can scan the local Drupal
+      # site on its private Docker IP. Safe here only because the port is
+      # `expose:`d to the ddev network, never published to the host.
+      #
+      # DO NOT copy this stanza to production. For any shared/multi-tenant or
+      # host-reachable deployment: remove SCANNER_ALLOW_PRIVATE (so the guard
+      # blocks internal hosts) AND set SCANNER_AUTH_TOKEN to a secret, with a
+      # matching ACCESSGUARD_SCANNER_TOKEN on the Drupal side.
       - SCANNER_ALLOW_PRIVATE=1
     labels:
       com.ddev.site-name: ${DDEV_SITENAME}

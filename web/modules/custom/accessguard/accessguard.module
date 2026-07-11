@@ -5,6 +5,9 @@
  * AccessGuard module hooks.
  */
 
+use Drupal\accessguard\Service\ScanAccessToken;
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\node\NodeInterface;
 
 /**
@@ -20,30 +23,75 @@ function accessguard_entity_type_alter(array &$entity_types) {
  * Implements hook_ENTITY_TYPE_insert() for nodes.
  */
 function accessguard_node_insert(NodeInterface $node) {
-  _accessguard_enqueue_if_published($node);
+  _accessguard_enqueue_scan($node);
 }
 
 /**
  * Implements hook_ENTITY_TYPE_update() for nodes.
  */
 function accessguard_node_update(NodeInterface $node) {
-  _accessguard_enqueue_if_published($node);
+  _accessguard_enqueue_scan($node);
 }
 
 /**
- * Enqueues a scan for a node when it is published.
+ * Enqueues a scan for a saved node.
  *
  * This is what makes a save trigger a re-scan, so violation data tracks the
  * content as it changes (and, with the publish gate, keeps the dashboard
- * current after an editor fixes an issue).
+ * current after an editor fixes an issue). Unpublished nodes are enqueued
+ * too — the queue worker scans them with a signed access token — because the
+ * publish gate reads the node's latest scan: without draft re-scans, a node
+ * unpublished with violations could never record the clean scan it needs to
+ * be publishable again.
  */
-function _accessguard_enqueue_if_published(NodeInterface $node) {
+function _accessguard_enqueue_scan(NodeInterface $node) {
   if (!\Drupal::config('accessguard.settings')->get('rescan_enabled')) {
     return;
   }
-  if ($node->isPublished()) {
-    \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
+  \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
+  // Record the enqueue in cron's dedup marker too, so a cron run right after
+  // a save doesn't enqueue the same (stale-looking) node a second time while
+  // the save-triggered scan is still waiting in the queue.
+  $state = \Drupal::state();
+  $pending = $state->get('accessguard.cron_enqueued', []);
+  $pending[(int) $node->id()] = \Drupal::time()->getRequestTime();
+  $state->set('accessguard.cron_enqueued', $pending);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_access() for nodes.
+ *
+ * Grants view access when the request carries a valid scan-access token for
+ * this exact node (see ScanAccessToken). This is how the anonymous scanner
+ * client can render unpublished content for a scan instead of receiving the
+ * site's 403 page. The token is HMAC-signed with the site's private key,
+ * bound to the node id, and expires, so it grants nothing beyond "view this
+ * one node for the scan window".
+ */
+function accessguard_node_access(NodeInterface $node, $operation, AccountInterface $account) {
+  if ($operation !== 'view') {
+    return AccessResult::neutral();
   }
+  // The result varies by the token query argument, so any cached access
+  // decision must be keyed on it.
+  $neutral = AccessResult::neutral()->addCacheContexts(['url.query_args:' . ScanAccessToken::QUERY_KEY]);
+  $request = \Drupal::requestStack()->getCurrentRequest();
+  if (!$request) {
+    return $neutral;
+  }
+  // Not query->get(): InputBag::get() throws on a crafted array-valued
+  // parameter (?accessguard-scan-token[]=x), which would 500 the request.
+  $token = $request->query->all()[ScanAccessToken::QUERY_KEY] ?? '';
+  if (!is_string($token) || $token === '') {
+    return $neutral;
+  }
+  if (\Drupal::service('accessguard.scan_access_token')->validate((int) $node->id(), $token)) {
+    // Max-age 0 keeps the token-granted response out of page caches.
+    return AccessResult::allowed()
+      ->addCacheContexts(['url.query_args:' . ScanAccessToken::QUERY_KEY])
+      ->setCacheMaxAge(0);
+  }
+  return $neutral;
 }
 
 /**
@@ -92,6 +140,9 @@ function accessguard_node_delete(NodeInterface $node) {
  */
 function accessguard_cron() {
   $config = \Drupal::config('accessguard.settings');
+  // Retention runs independently of re-scanning: old scans keep accumulating
+  // (and should keep expiring) even when automatic re-scans are switched off.
+  _accessguard_cron_purge_old_scans((int) ($config->get('retention_days') ?? 0));
   if (!$config->get('rescan_enabled')) {
     return;
   }
@@ -142,4 +193,42 @@ function accessguard_cron() {
     }
   }
   $state->set('accessguard.cron_enqueued', $pending);
+}
+
+/**
+ * Deletes scans (and their violations) older than the retention window.
+ *
+ * The latest scan of every node is always kept — the publish gate, the
+ * dashboards, and regression tracking read it — so retention can never make
+ * a page look unscanned. Deletion is bounded per cron run to keep individual
+ * runs cheap; the backlog drains across consecutive runs.
+ */
+function _accessguard_cron_purge_old_scans(int $retention_days) {
+  if ($retention_days <= 0) {
+    return;
+  }
+  $cutoff = \Drupal::time()->getRequestTime() - $retention_days * 86400;
+  $scanStorage = \Drupal::entityTypeManager()->getStorage('accessguard_scan');
+
+  $latestIds = \Drupal::service('accessguard.scan_repository')->latestScanIdByNode();
+  $query = $scanStorage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('created', $cutoff, '<')
+    ->range(0, 100);
+  if ($latestIds) {
+    $query->condition('id', array_values($latestIds), 'NOT IN');
+  }
+  $old = $query->execute();
+  if (!$old) {
+    return;
+  }
+  $violationStorage = \Drupal::entityTypeManager()->getStorage('accessguard_violation');
+  $violationIds = $violationStorage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('scan_id', $old, 'IN')
+    ->execute();
+  if ($violationIds) {
+    $violationStorage->delete($violationStorage->loadMultiple($violationIds));
+  }
+  $scanStorage->delete($scanStorage->loadMultiple($old));
 }

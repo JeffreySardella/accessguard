@@ -57,11 +57,11 @@ Lighthouse's accessibility audit *uses axe-core under the hood* (a curated subse
 | Author attribution | ❌ | ❌ | ✅ |
 | Audit-ready report export | ❌ | ❌ | ✅ |
 
-See `benchmark/RESULTS.md` for an empirical detection comparison on the demo fixtures (run it yourself: `cd benchmark && npm install && npm run benchmark`).
+`benchmark/RESULTS.md` shows a detection sanity check on the demo fixtures (run it yourself: `cd benchmark && npm install && npm run benchmark`). One honest caveat: all six fixtures target rules that are *inside* Lighthouse's axe subset, so the harness demonstrates detection parity on common rules — the full-ruleset coverage advantage (point 1 above) follows from axe's WCAG 2.2 AA ruleset being a superset, not from these fixtures.
 
 ## Security
 
-The scanner loads arbitrary URLs in a real browser, a classic SSRF risk. By default it **only** allows `http`/`https` and **blocks** private, loopback, link-local, CGNAT, and reserved IP ranges. Scanning internal/private hosts (like your own Drupal site on a private network) requires explicitly opting in via `SCANNER_ALLOW_PRIVATE=1` — secure by default, explicit override for trusted networks. The guard runs on **every** request the page makes (the navigation, any redirects, and subresources) via request interception, and each request is fulfilled over a connection **pinned to the exact IP that was validated** (DNS is consulted once, by the guard), so a DNS-rebinding attack can't swap the target between validation and connection — on any request, not just the first. The scan endpoint can also require a shared-secret token (`SCANNER_AUTH_TOKEN` on the service, matching token in the settings form) so only your Drupal site can drive it.
+The scanner loads arbitrary URLs in a real browser, a classic SSRF risk. By default it **only** allows `http`/`https` and **blocks** private, loopback, link-local, CGNAT, and reserved IP ranges. Scanning internal/private hosts (like your own Drupal site on a private network) requires explicitly opting in via `SCANNER_ALLOW_PRIVATE=1` — secure by default, explicit override for trusted networks. The guard runs on **every** request the page makes (the navigation, any redirects, and subresources) via request interception, and each request is fulfilled over a connection **pinned to the exact IP that was validated** (DNS is consulted once, by the guard), so a DNS-rebinding attack can't swap the target between validation and connection — on any request, not just the first. Both the scan and PDF endpoints can require a shared-secret token (`SCANNER_AUTH_TOKEN` on the service, matched on the Drupal side by the settings form or the `ACCESSGUARD_SCANNER_TOKEN` environment variable) so only your Drupal site can drive it.
 
 ## Quick start
 
@@ -90,7 +90,7 @@ You should see all six demo pages, each with the accessibility violation it was 
 
 ## What's built
 
-- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard, plus a PDF-rendering endpoint for audit reports. 22 tests.
+- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard, plus a PDF-rendering endpoint for audit reports. 33 tests.
 - **`accessguard` module**
   - `accessguard_scan` and `accessguard_violation` entities
   - `ScanRunner` (calls the scanner), `ScanRecorder` (persists results), and `RegressionService` (diffs a node's two latest scans) services

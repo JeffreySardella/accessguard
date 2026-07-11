@@ -7,12 +7,14 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the detail page's empty states and scan-history pagination.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class DashboardDetailTest extends KernelTestBase {
 
   use UserCreationTrait;

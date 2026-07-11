@@ -5,12 +5,14 @@ namespace Drupal\Tests\accessguard\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests cron's site-wide re-scanning of stale or unscanned published nodes.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class CronRescanTest extends KernelTestBase {
 
   /**
@@ -35,28 +37,39 @@ class CronRescanTest extends KernelTestBase {
   }
 
   /**
+   * Creates a published node without the save hook enqueueing a scan.
+   *
+   * Saving normally enqueues a scan AND records the cron dedup marker; these
+   * tests need nodes that look "never enqueued" so they exercise cron's own
+   * behavior in isolation.
+   */
+  private function createPublishedNodeQuietly(string $title): Node {
+    $config = \Drupal::configFactory()->getEditable('accessguard.settings');
+    $config->set('rescan_enabled', FALSE)->save();
+    $node = Node::create(['type' => 'page', 'title' => $title, 'status' => 1]);
+    $node->save();
+    $config->set('rescan_enabled', TRUE)->save();
+    return $node;
+  }
+
+  /**
    * Tests that cron enqueues a published node that has never been scanned.
    */
   public function testCronEnqueuesUnscannedPublishedNode(): void {
-    $node = Node::create(['type' => 'page', 'title' => 'never scanned', 'status' => 1]);
-    $node->save();
-
-    // Saving a published node also enqueues via the save hook, so measure the
-    // count that cron specifically adds as a delta.
+    $this->createPublishedNodeQuietly('never scanned');
     $queue = \Drupal::queue('accessguard_scan_queue');
-    $before = $queue->numberOfItems();
+    $this->assertSame(0, $queue->numberOfItems());
 
     accessguard_cron();
 
-    $this->assertSame(1, $queue->numberOfItems() - $before);
+    $this->assertSame(1, $queue->numberOfItems());
   }
 
   /**
    * Tests that cron skips a node whose latest scan is still fresh.
    */
   public function testCronSkipsRecentlyScannedNode(): void {
-    $node = Node::create(['type' => 'page', 'title' => 'fresh', 'status' => 1]);
-    $node->save();
+    $node = $this->createPublishedNodeQuietly('fresh');
     // A scan created "now" is within the default 86400s interval, so not stale.
     \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
       'target_entity_type' => 'node',
@@ -66,30 +79,46 @@ class CronRescanTest extends KernelTestBase {
     ])->save();
 
     $queue = \Drupal::queue('accessguard_scan_queue');
-    $before = $queue->numberOfItems();
 
     accessguard_cron();
 
     // Cron adds nothing because the node was recently scanned.
-    $this->assertSame(0, $queue->numberOfItems() - $before);
+    $this->assertSame(0, $queue->numberOfItems());
   }
 
   /**
    * Tests that cron does not re-enqueue a node awaiting a queued scan.
    */
   public function testCronDoesNotReenqueueWhileScanPending(): void {
-    $node = Node::create(['type' => 'page', 'title' => 'stale', 'status' => 1]);
-    $node->save();
+    $this->createPublishedNodeQuietly('stale');
     $queue = \Drupal::queue('accessguard_scan_queue');
-    $before = $queue->numberOfItems();
 
     accessguard_cron();
-    $this->assertSame(1, $queue->numberOfItems() - $before);
+    $this->assertSame(1, $queue->numberOfItems());
 
     // A second cron run before the queued scan is processed must not pile up
     // duplicate items for the same node.
     accessguard_cron();
-    $this->assertSame(1, $queue->numberOfItems() - $before);
+    $this->assertSame(1, $queue->numberOfItems());
+  }
+
+  /**
+   * Tests that a save-triggered enqueue suppresses the cron duplicate.
+   *
+   * An editor saving a stale node enqueues a scan via the save hook; the
+   * next cron run must see that pending enqueue and not add a second item
+   * for the same node.
+   */
+  public function testSaveEnqueueSuppressesCronDuplicate(): void {
+    Node::create(['type' => 'page', 'title' => 'just saved', 'status' => 1])->save();
+    $queue = \Drupal::queue('accessguard_scan_queue');
+    // The save hook enqueued the scan.
+    $this->assertSame(1, $queue->numberOfItems());
+
+    accessguard_cron();
+
+    // Cron adds nothing: the save-triggered scan is already pending.
+    $this->assertSame(1, $queue->numberOfItems());
   }
 
   /**
@@ -100,13 +129,11 @@ class CronRescanTest extends KernelTestBase {
    * tries again.
    */
   public function testCronRetriesWhenPendingMarkerExpires(): void {
-    $node = Node::create(['type' => 'page', 'title' => 'stale', 'status' => 1]);
-    $node->save();
+    $node = $this->createPublishedNodeQuietly('stale');
     $queue = \Drupal::queue('accessguard_scan_queue');
-    $before = $queue->numberOfItems();
 
     accessguard_cron();
-    $this->assertSame(1, $queue->numberOfItems() - $before);
+    $this->assertSame(1, $queue->numberOfItems());
 
     // Age the marker past the re-scan interval, as if the enqueue happened
     // long ago but no scan ever completed.
@@ -115,20 +142,58 @@ class CronRescanTest extends KernelTestBase {
     \Drupal::state()->set('accessguard.cron_enqueued', $enqueued);
 
     accessguard_cron();
-    $this->assertSame(2, $queue->numberOfItems() - $before);
+    $this->assertSame(2, $queue->numberOfItems());
+  }
+
+  /**
+   * Tests that retention purges old scans but always keeps the latest.
+   *
+   * The latest scan per node feeds the publish gate and every dashboard, so
+   * retention must never delete it — even when it is itself older than the
+   * window.
+   */
+  public function testRetentionPurgesOldScansButKeepsLatest(): void {
+    \Drupal::configFactory()->getEditable('accessguard.settings')->set('retention_days', 30)->save();
+    $node = $this->createPublishedNodeQuietly('retention');
+    $scanStorage = \Drupal::entityTypeManager()->getStorage('accessguard_scan');
+    $violationStorage = \Drupal::entityTypeManager()->getStorage('accessguard_violation');
+    $now = \Drupal::time()->getRequestTime();
+
+    // Three scans, all older than the 30-day window; the newest of them is
+    // still the node's latest scan and must survive.
+    $ids = [];
+    foreach ([100, 90, 60] as $daysAgo) {
+      $scan = $scanStorage->create([
+        'target_entity_type' => 'node',
+        'target_entity_id' => $node->id(),
+        'status' => 'complete',
+        'created' => $now - $daysAgo * 86400,
+      ]);
+      $scan->save();
+      $ids[$daysAgo] = (int) $scan->id();
+    }
+    $violation = $violationStorage->create([
+      'scan_id' => $ids[100],
+      'rule_id' => 'image-alt',
+      'impact' => 'critical',
+      'selector' => 'img',
+    ]);
+    $violation->save();
+
+    accessguard_cron();
+
+    $remaining = array_map('intval', array_values($scanStorage->getQuery()->accessCheck(FALSE)->execute()));
+    $this->assertSame([$ids[60]], $remaining, 'Only the latest scan survives.');
+    // The purged scan's violations went with it.
+    $this->assertEmpty($violationStorage->getQuery()->accessCheck(FALSE)->execute());
   }
 
   /**
    * Tests that cron-enqueued items carry the 'cron' trigger in their payload.
    */
   public function testCronEnqueuesWithCronTrigger(): void {
-    $node = Node::create(['type' => 'page', 'title' => 't', 'status' => 1]);
-    $node->save();
+    $this->createPublishedNodeQuietly('t');
     $queue = \Drupal::queue('accessguard_scan_queue');
-    // Drain anything the save hook queued.
-    while ($item = $queue->claimItem()) {
-      $queue->deleteItem($item);
-    }
     accessguard_cron();
     $item = $queue->claimItem();
     $this->assertSame('cron', $item->data['trigger'] ?? NULL);

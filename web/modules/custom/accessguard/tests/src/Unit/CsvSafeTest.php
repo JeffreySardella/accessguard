@@ -4,12 +4,12 @@ namespace Drupal\Tests\accessguard\Unit;
 
 use Drupal\accessguard\Csv\CsvSafe;
 use Drupal\Tests\UnitTestCase;
+use PHPUnit\Framework\Attributes\Group;
 
 /**
  * Tests CsvSafe's formula-injection neutralization.
- *
- * @group accessguard
  */
+#[Group('accessguard')]
 class CsvSafeTest extends UnitTestCase {
 
   /**

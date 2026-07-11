@@ -15,6 +15,26 @@ app.use((req, res, next) => (req.path === '/pdf' ? next() : jsonSmall(req, res, 
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// Every /scan and /pdf request launches a full Chromium (~hundreds of MB), so
+// unbounded concurrency lets a burst of requests OOM the container. Cap
+// in-flight browser work and shed the excess with 503 so the client (the
+// Drupal queue) backs off and retries instead of piling on.
+let inFlight = 0;
+function withBrowserSlot(handler) {
+  return async (req, res) => {
+    const max = Math.max(1, parseInt(process.env.SCANNER_MAX_CONCURRENCY || '3', 10) || 3);
+    if (inFlight >= max) {
+      return res.status(503).json({ error: 'scanner_busy' });
+    }
+    inFlight++;
+    try {
+      await handler(req, res);
+    } finally {
+      inFlight--;
+    }
+  };
+}
+
 // Optional shared-secret auth: when SCANNER_AUTH_TOKEN is set, /scan requires
 // a matching X-Scanner-Token header. Hashing both sides makes the comparison
 // timing-safe regardless of length. Unset (the default) keeps the service
@@ -28,7 +48,7 @@ function isAuthorized(req) {
   return timingSafeEqual(a, b);
 }
 
-app.post('/scan', async (req, res) => {
+app.post('/scan', withBrowserSlot(async (req, res) => {
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
@@ -38,19 +58,30 @@ app.post('/scan', async (req, res) => {
   }
   try {
     await assertUrlAllowed(url);
-  } catch {
-    return res.status(400).json({ error: 'url_not_allowed' });
+  } catch (err) {
+    // A hostname that simply doesn't resolve is a typo, not a policy block;
+    // reporting it as url_not_allowed sends operators down the wrong path.
+    const code = err && err.code === 'ENOTFOUND' ? 'host_not_found' : 'url_not_allowed';
+    return res.status(400).json({ error: code });
   }
   try {
     const result = await runScan(url);
     res.json(result);
   } catch (err) {
     console.error('[accessguard-scanner] scan failed:', err);
+    // Target-side failures (the page is broken/slow/not HTML) get 502 with a
+    // specific code, so the client can tell them from scanner-internal
+    // failures (500) and shed load (503). "Fix the page" vs "fix the
+    // scanner" are different on-call pages.
+    const targetCodes = ['target_http_error', 'target_not_html', 'navigation_timeout', 'axe_timeout'];
+    if (err && targetCodes.includes(err.code)) {
+      return res.status(502).json({ error: err.code, ...(err.status ? { status: err.status } : {}) });
+    }
     res.status(500).json({ error: 'scan_failed' });
   }
-});
+}));
 
-app.post('/pdf', jsonPdf, async (req, res) => {
+app.post('/pdf', jsonPdf, withBrowserSlot(async (req, res) => {
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
@@ -66,9 +97,26 @@ app.post('/pdf', jsonPdf, async (req, res) => {
     console.error('[accessguard-scanner] pdf failed:', err);
     res.status(500).json({ error: 'pdf_failed' });
   }
-});
+}));
 
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => console.log(`accessguard-scanner listening on ${PORT}`));
+  // Last-resort guard: a rejection that escapes a request handler (e.g. a
+  // Puppeteer event firing after browser teardown) must not kill the whole
+  // service and every in-flight scan with it. Disabled under test so real
+  // bugs still surface loudly there.
+  process.on('unhandledRejection', (reason) => {
+    console.error('[accessguard-scanner] unhandled rejection:', reason);
+  });
+  const server = app.listen(PORT, () => console.log(`accessguard-scanner listening on ${PORT}`));
+  // Graceful shutdown: stop accepting new connections and let in-flight scans
+  // finish, rather than cutting them off (and orphaning a Chromium) when the
+  // orchestrator sends SIGTERM. A short hard-exit timer bounds the wait.
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    process.on(signal, () => {
+      console.log(`[accessguard-scanner] ${signal} received, draining…`);
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 10000).unref();
+    });
+  }
 }

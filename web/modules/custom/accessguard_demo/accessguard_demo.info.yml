@@ -5,4 +5,5 @@ package: Accessibility
 core_version_requirement: ^11
 dependencies:
   - drupal:node
+  - drupal:filter
   - accessguard:accessguard

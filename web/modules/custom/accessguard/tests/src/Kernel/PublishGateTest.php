@@ -7,12 +7,14 @@ use Drupal\user\Entity\Role;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the AccessguardGate publish-gating constraint.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class PublishGateTest extends KernelTestBase {
 
   /**
@@ -60,6 +62,26 @@ class PublishGateTest extends KernelTestBase {
         'rule_id' => 'image-alt',
         'impact' => 'critical',
         'selector' => 'img',
+      ])->save();
+    }
+  }
+
+  /**
+   * Creates a completed scan whose violations carry the given impacts.
+   */
+  private function makeScanWithImpacts(int $nid, array $impacts): void {
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $nid,
+      'status' => 'complete',
+    ]);
+    $scan->save();
+    foreach ($impacts as $i => $impact) {
+      \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+        'scan_id' => $scan->id(),
+        'rule_id' => 'rule-' . $i,
+        'impact' => $impact,
+        'selector' => '.sel-' . $i,
       ])->save();
     }
   }
@@ -136,6 +158,75 @@ class PublishGateTest extends KernelTestBase {
     $node->save();
     $this->makeScan((int) $node->id(), 1);
     $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  /**
+   * Tests the severity-threshold ranking, not just the default 'critical'.
+   *
+   * A 'serious' threshold must block serious (and critical) violations while
+   * letting moderate ones publish — the ranking arithmetic is what makes the
+   * gate's central setting mean anything.
+   */
+  public function testThresholdRankingBlocksAtAndAboveOnly(): void {
+    \Drupal::configFactory()->getEditable('accessguard.settings')->set('gate_threshold', 'serious')->save();
+
+    $moderate = Node::create(['type' => 'page', 'title' => 'moderate only', 'status' => 0]);
+    $moderate->save();
+    $this->makeScanWithImpacts((int) $moderate->id(), ['moderate', 'minor']);
+    $moderate->setPublished();
+    $this->assertSame(0, $this->countGateViolations($moderate));
+
+    $serious = Node::create(['type' => 'page', 'title' => 'has serious', 'status' => 0]);
+    $serious->save();
+    $this->makeScanWithImpacts((int) $serious->id(), ['moderate', 'serious']);
+    $serious->setPublished();
+    $this->assertSame(1, $this->countGateViolations($serious));
+  }
+
+  /**
+   * Tests that unknown-impact violations are gateable, not invisible.
+   *
+   * The axe engine can return a null impact (stored as 'unknown'); it ranks
+   * alongside moderate so it blocks at a moderate threshold but not at the
+   * default critical one.
+   */
+  public function testUnknownImpactRanksAsModerate(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'unknown impact', 'status' => 0]);
+    $node->save();
+    $this->makeScanWithImpacts((int) $node->id(), ['unknown']);
+
+    // Default threshold (critical): unknown does not block.
+    $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+
+    // Moderate threshold: unknown blocks like a moderate violation would.
+    \Drupal::configFactory()->getEditable('accessguard.settings')->set('gate_threshold', 'moderate')->save();
+    $this->assertSame(1, $this->countGateViolations($node));
+  }
+
+  /**
+   * Tests the unpublish → fix → re-scan → republish path.
+   *
+   * Regression test for the gate deadlock: a node unpublished with a failing
+   * scan is blocked from republishing, but once a newer clean scan is
+   * recorded (draft saves enqueue scans, and the worker scans unpublished
+   * nodes with an access token), the gate opens again.
+   */
+  public function testCleanRescanUnblocksRepublish(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'was bad', 'status' => 1]);
+    $node->save();
+    $this->makeScan((int) $node->id(), 1);
+
+    // Unpublish, then try to republish: the stale failing scan blocks it.
+    $node->setUnpublished();
+    $node->save();
+    $node->setPublished();
+    $this->assertSame(1, $this->countGateViolations($node));
+
+    // The editor fixes the content and a re-scan of the draft comes back
+    // clean. Recording it must unblock the publish transition.
+    $this->makeScan((int) $node->id(), 0);
     $this->assertSame(0, $this->countGateViolations($node));
   }
 

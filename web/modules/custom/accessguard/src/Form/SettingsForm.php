@@ -2,6 +2,7 @@
 
 namespace Drupal\accessguard\Form;
 
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 
@@ -37,11 +38,29 @@ class SettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('scanner_endpoint'),
       '#required' => TRUE,
     ];
+    // The token is a shared secret: render it as a password field and never
+    // echo the stored value back into the page.
+    $hasToken = (string) $config->get('scanner_auth_token') !== '';
     $form['scanner_auth_token'] = [
-      '#type' => 'textfield',
+      '#type' => 'password',
       '#title' => $this->t('Scanner auth token'),
-      '#description' => $this->t('Shared secret sent as the X-Scanner-Token header. Must match the SCANNER_AUTH_TOKEN environment variable on the scanner service. Leave empty if the scanner does not require a token.'),
-      '#default_value' => $config->get('scanner_auth_token'),
+      '#description' => $this->t('Shared secret sent as the X-Scanner-Token header, matching SCANNER_AUTH_TOKEN on the scanner service. For a secret you do not want in exported config, set the ACCESSGUARD_SCANNER_TOKEN environment variable instead — it overrides this field. @state', [
+        '@state' => $hasToken
+          ? $this->t('A token is currently saved; enter a value to replace it, or leave blank to keep it.')
+          : $this->t('Leave empty if the scanner does not require a token.'),
+      ]),
+    ];
+    if ($hasToken) {
+      $form['scanner_auth_token_clear'] = [
+        '#type' => 'checkbox',
+        '#title' => $this->t('Remove the saved scanner auth token'),
+      ];
+    }
+    $form['scan_base_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Scan base URL'),
+      '#description' => $this->t('Base URL the scanner should use to reach this site, e.g. http://web when the scanner runs on a Docker network. Required for CLI queue processing (drush queue:run, CLI cron), which otherwise generates http://default/... URLs. Leave empty to use the URLs this site generates for itself.'),
+      '#default_value' => $config->get('scan_base_url'),
     ];
     $form['gate_enabled'] = [
       '#type' => 'checkbox',
@@ -76,6 +95,13 @@ class SettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('rescan_batch') ?: 25,
       '#min' => 1,
     ];
+    $form['retention_days'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Scan retention (days)'),
+      '#description' => $this->t('Cron deletes scans (and their violations) older than this. The latest scan of every page is always kept, so dashboards and the publish gate are unaffected. 0 keeps all scans forever — with daily re-scanning that is roughly 365 scans per page per year.'),
+      '#default_value' => (int) ($config->get('retention_days') ?? 0),
+      '#min' => 0,
+    ];
 
     return parent::buildForm($form, $form_state);
   }
@@ -83,15 +109,42 @@ class SettingsForm extends ConfigFormBase {
   /**
    * {@inheritdoc}
    */
+  public function validateForm(array &$form, FormStateInterface $form_state): void {
+    parent::validateForm($form, $form_state);
+    // A malformed endpoint would otherwise only surface at scan time, as
+    // queue-log warnings on every single scan.
+    $endpoint = trim((string) $form_state->getValue('scanner_endpoint'));
+    if (!UrlHelper::isValid($endpoint, TRUE)) {
+      $form_state->setErrorByName('scanner_endpoint', $this->t('The scanner endpoint must be an absolute URL, e.g. http://accessguard-scanner:3000.'));
+    }
+    $base = trim((string) $form_state->getValue('scan_base_url'));
+    if ($base !== '' && !UrlHelper::isValid($base, TRUE)) {
+      $form_state->setErrorByName('scan_base_url', $this->t('The scan base URL must be an absolute URL, e.g. http://web.'));
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $this->config('accessguard.settings')
+    $config = $this->config('accessguard.settings');
+    // Blank means "keep the saved token" (the password field never shows it);
+    // removal is the explicit checkbox.
+    if ($form_state->getValue('scanner_auth_token_clear')) {
+      $config->set('scanner_auth_token', '');
+    }
+    elseif ((string) $form_state->getValue('scanner_auth_token') !== '') {
+      $config->set('scanner_auth_token', (string) $form_state->getValue('scanner_auth_token'));
+    }
+    $config
       ->set('scanner_endpoint', $form_state->getValue('scanner_endpoint'))
-      ->set('scanner_auth_token', (string) $form_state->getValue('scanner_auth_token'))
+      ->set('scan_base_url', trim((string) $form_state->getValue('scan_base_url')))
       ->set('gate_enabled', (bool) $form_state->getValue('gate_enabled'))
       ->set('gate_threshold', $form_state->getValue('gate_threshold'))
       ->set('rescan_enabled', (bool) $form_state->getValue('rescan_enabled'))
       ->set('rescan_interval', (int) $form_state->getValue('rescan_interval'))
       ->set('rescan_batch', (int) $form_state->getValue('rescan_batch'))
+      ->set('retention_days', (int) $form_state->getValue('retention_days'))
       ->save();
     parent::submitForm($form, $form_state);
   }

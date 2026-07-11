@@ -42,7 +42,10 @@ export async function renderPdf(html) {
         req.isNavigationRequest() &&
         req.url() === 'about:blank';
       if (isMainBootstrap || req.url().startsWith('data:')) {
-        req.continue();
+        // Guarded like the abort path below: if the browser is torn down while
+        // this event is in flight, continue() rejects, and an unhandled
+        // rejection would kill the whole process.
+        req.continue().catch(() => {});
         return;
       }
       req.abort('blockedbyclient').catch(() => {});
@@ -52,6 +55,9 @@ export async function renderPdf(html) {
       format: 'A4',
       printBackground: true,
       margin: { top: '1cm', bottom: '1cm', left: '1cm', right: '1cm' },
+      // Explicit render deadline so a pathological report can't hold a full
+      // Chromium beyond it.
+      timeout: 60000,
     });
     return Buffer.from(pdf);
   } finally {

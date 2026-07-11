@@ -5,6 +5,9 @@ services:
   accessguard.pdf_client:
     class: Drupal\accessguard\Service\PdfClient
     arguments: ['@http_client', '@config.factory']
+  accessguard.scan_access_token:
+    class: Drupal\accessguard\Service\ScanAccessToken
+    arguments: ['@private_key', '@datetime.time', '@config.factory']
   accessguard.scan_recorder:
     class: Drupal\accessguard\Service\ScanRecorder
     arguments: ['@entity_type.manager', '@database']
@@ -16,10 +19,10 @@ services:
     arguments: ['@database']
   accessguard.waiver_matcher:
     class: Drupal\accessguard\Service\WaiverMatcher
-    arguments: ['@entity_type.manager']
+    arguments: ['@entity_type.manager', '@lock']
   accessguard.violation_analytics:
     class: Drupal\accessguard\Service\ViolationAnalytics
     arguments: ['@entity_type.manager', '@accessguard.scan_repository', '@accessguard.waiver_matcher', '@current_user']
   accessguard.report_html_builder:
     class: Drupal\accessguard\Service\ReportHtmlBuilder
-    arguments: ['@accessguard.violation_analytics', '@accessguard.scan_repository', '@accessguard.waiver_matcher', '@entity_type.manager', '@current_user', '@date.formatter', '@config.factory', '@datetime.time']
+    arguments: ['@accessguard.violation_analytics', '@entity_type.manager', '@current_user', '@date.formatter', '@config.factory', '@datetime.time']

@@ -7,12 +7,14 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the analytics tab controller renders rule/author tables.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class AnalyticsControllerTest extends KernelTestBase {
 
   use UserCreationTrait;

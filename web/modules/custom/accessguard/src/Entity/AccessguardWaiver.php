@@ -21,6 +21,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   admin_permission: 'triage accessguard violations',
   handlers: [
     'views_data' => 'Drupal\views\EntityViewsData',
+    'storage_schema' => 'Drupal\accessguard\Entity\Storage\TargetIndexStorageSchema',
   ],
   entity_keys: [
     'id' => 'id',

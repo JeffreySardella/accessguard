@@ -8,12 +8,14 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests node-access enforcement and triage-link visibility on the dashboard.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class DashboardAccessTest extends KernelTestBase {
 
   use UserCreationTrait;

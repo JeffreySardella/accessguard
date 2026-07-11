@@ -6,12 +6,14 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests ReportHtmlBuilder produces a self-contained audit document.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class ReportHtmlBuilderTest extends KernelTestBase {
 
   use UserCreationTrait;

@@ -19,6 +19,30 @@ test('connects to the pinned IP, not DNS', async () => {
   expect(res.body.toString()).toBe(`hello accessguard-pin-test.invalid:${port}`);
 });
 
+test('forwards a POST body with a corrected content-length', async () => {
+  let received = '';
+  let receivedLength;
+  const server = http.createServer((req, res) => {
+    receivedLength = req.headers['content-length'];
+    req.on('data', (c) => { received += c; });
+    req.on('end', () => { res.end('ok'); });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  const res = await fetchPinned(`http://accessguard-pin-test.invalid:${port}/p`, '127.0.0.1', {
+    method: 'POST',
+    // A deliberately wrong inbound content-length must not be forwarded.
+    headers: { 'content-length': '9999' },
+    body: 'hello body',
+  });
+  server.close();
+
+  expect(res.status).toBe(200);
+  expect(received).toBe('hello body');
+  expect(receivedLength).toBe(String(Buffer.byteLength('hello body')));
+});
+
 test('returns redirects without following them', async () => {
   const server = http.createServer((req, res) => {
     res.statusCode = 302;
@@ -52,3 +76,45 @@ test('decompresses a gzip response so the browser gets plain bytes', async () =>
   expect(res.body.toString()).toBe('compressed payload');
   expect(res.headers['content-encoding']).toBeUndefined();
 });
+
+test('rejects a decompression bomb even when the compressed body is tiny', async () => {
+  const { gzipSync } = await import('node:zlib');
+  // 60 MB of zeros gzips to ~60 KB — far under the 10 MB wire cap, far over
+  // the decoded-output ceiling. Without that ceiling this expands in memory
+  // and can OOM the service.
+  const bomb = gzipSync(Buffer.alloc(60 * 1024 * 1024));
+  expect(bomb.length).toBeLessThan(10 * 1024 * 1024);
+  const server = http.createServer((req, res) => {
+    res.setHeader('content-encoding', 'gzip');
+    res.end(bomb);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    await expect(fetchPinned(`http://accessguard-pin-test.invalid:${port}/bomb`, '127.0.0.1')).rejects.toThrow();
+  } finally {
+    server.close();
+  }
+});
+
+test('caps a slow-drip response with the total deadline', async () => {
+  // Send a byte every 2s and never end: this keeps resetting the 20s idle
+  // socket timeout, so only the total deadline can stop it. The deadline is
+  // 30s; assert it rejects well before an unbounded stream would (the test
+  // timeout is 40s).
+  let timer;
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain', 'transfer-encoding': 'chunked' });
+    timer = setInterval(() => res.write('.'), 2000);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    await expect(fetchPinned(`http://accessguard-pin-test.invalid:${port}/drip`, '127.0.0.1')).rejects.toThrow('deadline_exceeded');
+  } finally {
+    clearInterval(timer);
+    server.close();
+  }
+}, 40000);

@@ -3,12 +3,14 @@
 namespace Drupal\Tests\accessguard\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests ScanRepository's aggregate lookups over accessguard_scan.
  *
  * @group accessguard
  */
+#[RunTestsInSeparateProcesses]
 class ScanRepositoryTest extends KernelTestBase {
 
   /**

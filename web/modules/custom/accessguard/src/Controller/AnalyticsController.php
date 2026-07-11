@@ -49,7 +49,12 @@ class AnalyticsController extends ControllerBase {
         '#rows' => $rows,
         '#empty' => $this->t('No violations found in the latest scans.'),
       ],
-      '#cache' => ['max-age' => 0],
+      '#cache' => [
+        // Any scan/violation/waiver write invalidates the list tags; the
+        // aggregation is node-access filtered, hence the grants context.
+        'tags' => ['accessguard_scan_list', 'accessguard_violation_list', 'accessguard_waiver_list', 'node_list'],
+        'contexts' => ['user.node_grants:view', 'user.permissions'],
+      ],
     ];
   }
 
@@ -84,7 +89,12 @@ class AnalyticsController extends ControllerBase {
         '#rows' => $rows,
         '#empty' => $this->t('No scanned content with a known author yet.'),
       ],
-      '#cache' => ['max-age' => 0],
+      '#cache' => [
+        // Any scan/violation/waiver write invalidates the list tags; the
+        // aggregation is node-access filtered, hence the grants context.
+        'tags' => ['accessguard_scan_list', 'accessguard_violation_list', 'accessguard_waiver_list', 'node_list'],
+        'contexts' => ['user.node_grants:view', 'user.permissions'],
+      ],
     ];
   }
 

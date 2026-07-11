@@ -28,7 +28,7 @@ class PdfClient {
       'json' => ['html' => $html],
       'timeout' => 60,
     ];
-    $token = (string) ($config->get('scanner_auth_token') ?? '');
+    $token = ScanRunner::resolveToken($config);
     if ($token !== '') {
       $options['headers'] = ['X-Scanner-Token' => $token];
     }
@@ -38,7 +38,14 @@ class PdfClient {
     catch (\Throwable $e) {
       throw new \RuntimeException('AccessGuard PDF render failed: ' . $e->getMessage(), 0, $e);
     }
-    return (string) $response->getBody();
+    $body = (string) $response->getBody();
+    // A misconfigured endpoint can answer 200 with HTML or JSON; without this
+    // check the user downloads a corrupt .pdf instead of hitting the friendly
+    // error path the caller provides for exceptions.
+    if (!str_starts_with($body, '%PDF')) {
+      throw new \RuntimeException('AccessGuard PDF render returned something that is not a PDF.');
+    }
+    return $body;
   }
 
 }
