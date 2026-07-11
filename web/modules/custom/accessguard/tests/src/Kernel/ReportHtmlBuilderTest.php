@@ -81,6 +81,10 @@ class ReportHtmlBuilderTest extends KernelTestBase {
     $this->assertStringContainsString('<th scope="col">Rule</th>', $html);
     // No unscoped header cells remain.
     $this->assertStringNotContainsString('<th>', $html);
+    // The honest automated-coverage disclaimer is present so the report can't
+    // be mistaken for a conformance certification.
+    $this->assertStringContainsString('Automated testing only', $html);
+    $this->assertStringContainsString('not a conformance certification', $html);
   }
 
   /**

@@ -17,6 +17,7 @@ Organizations under WCAG 2.2 / Section 508 must keep their websites accessible, 
 - Reimplementing or improving axe-core's detection rules.
 - Auto-remediating violations (the tool flags; humans fix).
 - Scanning non-Drupal or arbitrary external sites.
+- **Certifying WCAG conformance.** Automated testing covers ~23 of the 55 WCAG 2.2 A/AA criteria; a clean scan is necessary but not sufficient for conformance. AccessGuard governs the automatable layer and produces evidence to feed a manual audit — it does not replace one, and its reports carry a disclaimer to that effect.
 
 ## Architecture
 

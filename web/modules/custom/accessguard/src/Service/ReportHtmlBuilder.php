@@ -17,6 +17,22 @@ use Drupal\Core\Session\AccountProxyInterface;
  */
 class ReportHtmlBuilder {
 
+  /**
+   * The honest automated-coverage disclaimer (safe static HTML).
+   *
+   * Automated testing (axe-core) detects only a fraction of accessibility
+   * issues, so a clean scan is not the same as WCAG conformance. Stating this
+   * on the report keeps the artifact from being mistaken for a conformance
+   * certification (see docs/AUDIT-PASS3.md).
+   */
+  public const DISCLAIMER_HTML = '<strong>Automated testing only.</strong> '
+    . 'This report reflects automated checks (axe-core), which detect roughly 30–57% of '
+    . 'accessibility issues and can definitively evaluate only about a third of WCAG 2.2 '
+    . 'Level A/AA success criteria. A clean automated scan is necessary but <em>not '
+    . 'sufficient</em> for WCAG conformance or legal compliance; full conformance requires '
+    . 'manual expert evaluation and assistive-technology testing. This document is not a '
+    . 'conformance certification.';
+
   public function __construct(
     protected ViolationAnalytics $analytics,
     protected EntityTypeManagerInterface $entityTypeManager,
@@ -44,7 +60,8 @@ class ReportHtmlBuilder {
       . '<style>' . $this->css() . '</style></head><body>';
     $parts[] = '<section class="cover"><h1>Accessibility audit report</h1>'
       . '<p class="site">' . $siteName . '</p>'
-      . '<p class="meta">Generated ' . Html::escape($date) . ' &middot; Prepared by ' . $preparedBy . '</p></section>';
+      . '<p class="meta">Generated ' . Html::escape($date) . ' &middot; Prepared by ' . $preparedBy . '</p>'
+      . '<div class="disclaimer">' . self::DISCLAIMER_HTML . '</div></section>';
     $parts[] = $this->summarySection();
     $parts[] = $this->byRuleSection();
     $parts[] = $this->byAuthorSection();
@@ -62,7 +79,9 @@ class ReportHtmlBuilder {
       . '.cover{padding:60px 0;text-align:center;page-break-after:always}.site{font-size:18px;font-weight:bold}'
       . '.meta{color:#666}table{width:100%;border-collapse:collapse;margin:8px 0}'
       . 'th,td{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}'
-      . 'th{background:#f0f0f0}.waived{color:#666}.page-block{page-break-inside:avoid;margin:12px 0}';
+      . 'th{background:#f0f0f0}.waived{color:#666}.page-block{page-break-inside:avoid;margin:12px 0}'
+      . '.disclaimer{margin:24px auto 0;max-width:640px;padding:10px 14px;border:1px solid #999;'
+      . 'background:#f7f7f7;color:#333;font-size:11px;text-align:left;line-height:1.4}';
   }
 
   /**
