@@ -75,6 +75,12 @@ class ReportHtmlBuilderTest extends KernelTestBase {
     // Self-contained: no external asset references.
     $this->assertStringNotContainsString('<script', $html);
     $this->assertStringNotContainsString('src="http', $html);
+    // Accessibility of the report itself (WCAG 3.1.1 / 2.4.2 / 1.3.1).
+    $this->assertStringContainsString('<html lang="en">', $html);
+    $this->assertStringContainsString('<title>Accessibility audit report', $html);
+    $this->assertStringContainsString('<th scope="col">Rule</th>', $html);
+    // No unscoped header cells remain.
+    $this->assertStringNotContainsString('<th>', $html);
   }
 
   /**
