@@ -66,4 +66,53 @@ class ScanRecorderTest extends KernelTestBase {
     $this->assertCount(2, $violations);
   }
 
+  /**
+   * Tests that the scan-access token is stripped from the stored URL.
+   *
+   * The token is a live bearer credential; keeping it in the stored URL would
+   * leak it into the CSV and PDF audit exports that render that URL.
+   */
+  public function testScanTokenStrippedFromStoredUrl(): void {
+    $result = [
+      'url' => 'http://site/node/9?accessguard-scan-token=1799999999.abcDEF123&keep=1',
+      'violations' => [],
+    ];
+    $scan = $this->container->get('accessguard.scan_recorder')->record('node', 9, NULL, 'manual', $result);
+    $stored = $scan->get('url')->value;
+    $this->assertStringNotContainsString('accessguard-scan-token', $stored);
+    // Unrelated query args and the path are preserved.
+    $this->assertStringContainsString('/node/9', $stored);
+    $this->assertStringContainsString('keep=1', $stored);
+  }
+
+  /**
+   * Tests that an oversized selector is capped, not left to abort the scan.
+   *
+   * On strict SQL backends an over-2048-char selector would throw SQLSTATE
+   * 22001 and roll back the whole transaction; capping keeps the scan intact.
+   */
+  public function testOversizedSelectorIsCapped(): void {
+    $longSelector = str_repeat('div > ', 500) . 'img';
+    $this->assertGreaterThan(2048, strlen($longSelector));
+    $result = [
+      'url' => 'http://x/node/3',
+      'violations' => [
+      [
+        'ruleId' => 'image-alt',
+        'impact' => 'critical',
+        'wcagCriterion' => 'wcag2a',
+        'selector' => $longSelector,
+        'html' => '<img>',
+        'helpUrl' => 'http://h',
+      ],
+      ],
+    ];
+    $scan = $this->container->get('accessguard.scan_recorder')->record('node', 3, NULL, 'manual', $result);
+    $violations = \Drupal::entityTypeManager()->getStorage('accessguard_violation')
+      ->loadByProperties(['scan_id' => $scan->id()]);
+    $this->assertCount(1, $violations);
+    $stored = reset($violations)->get('selector')->value;
+    $this->assertSame(2048, mb_strlen($stored));
+  }
+
 }
