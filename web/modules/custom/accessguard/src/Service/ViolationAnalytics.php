@@ -3,6 +3,7 @@
 namespace Drupal\accessguard\Service;
 
 use Drupal\accessguard\Repository\ScanRepository;
+use Drupal\accessguard\Severity;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 
@@ -92,12 +93,7 @@ class ViolationAnalytics {
           'uid' => $uid,
           'name' => $name,
           'pages' => 0,
-          'critical' => 0,
-          'serious' => 0,
-          'moderate' => 0,
-          'minor' => 0,
-          'waived' => 0,
-        ];
+        ] + Severity::zeroCounts() + ['waived' => 0];
       }
       $authors[$key]['pages']++;
       foreach ($ctx['violations'] as $v) {
@@ -135,13 +131,7 @@ class ViolationAnalytics {
         'nid' => $ctx['nid'],
         'created' => $ctx['created'],
         'open' => 0,
-        'critical' => 0,
-        'serious' => 0,
-        'moderate' => 0,
-        'minor' => 0,
-        'unknown' => 0,
-        'waived' => 0,
-      ];
+      ] + Severity::zeroCounts() + ['unknown' => 0, 'waived' => 0];
       foreach ($ctx['violations'] as $v) {
         $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
         if (isset($ctx['waived'][$fp])) {
@@ -149,8 +139,8 @@ class ViolationAnalytics {
           continue;
         }
         $row['open']++;
-        $impact = (string) $v->get('impact')->value;
-        $row[isset($row[$impact]) ? $impact : 'unknown']++;
+        $impact = Severity::normalize((string) $v->get('impact')->value);
+        $row[$impact]++;
       }
       $pages[$ctx['nid']] = $row;
     }
@@ -164,7 +154,7 @@ class ViolationAnalytics {
    *   Totals across accessible nodes.
    */
   public function summary(): array {
-    $out = ['pages' => 0, 'open' => 0, 'critical' => 0, 'serious' => 0, 'moderate' => 0, 'minor' => 0];
+    $out = ['pages' => 0, 'open' => 0] + Severity::zeroCounts();
     foreach ($this->accessibleScans() as $ctx) {
       $out['pages']++;
       foreach ($ctx['violations'] as $v) {

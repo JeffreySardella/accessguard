@@ -2,6 +2,7 @@
 
 namespace Drupal\accessguard\Service;
 
+use Drupal\accessguard\Severity;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
@@ -30,12 +31,11 @@ class ScanRecorder {
    *   The saved scan entity.
    */
   public function record(string $entityType, int $entityId, ?int $authorUid, string $triggeredBy, array $scanResult) {
-    $validImpacts = ['critical', 'serious', 'moderate', 'minor'];
     $violations = $scanResult['violations'] ?? [];
-    $counts = ['critical' => 0, 'serious' => 0, 'moderate' => 0, 'minor' => 0];
+    $counts = Severity::zeroCounts();
     $normalizedImpacts = [];
     foreach ($violations as $key => $v) {
-      $impact = in_array($v['impact'] ?? NULL, $validImpacts, TRUE) ? $v['impact'] : 'unknown';
+      $impact = Severity::normalize($v['impact'] ?? NULL);
       $normalizedImpacts[$key] = $impact;
       if (isset($counts[$impact])) {
         $counts[$impact]++;
