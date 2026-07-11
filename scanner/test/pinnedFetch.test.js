@@ -61,6 +61,26 @@ test('returns redirects without following them', async () => {
   expect(res.headers.location).toBe('http://127.0.0.1/elsewhere');
 });
 
+test('drops Set-Cookie rather than corrupting multiple cookies', async () => {
+  // Two cookies, one carrying a comma inside an Expires date. A naive comma
+  // join would merge them into one malformed header; we drop them instead.
+  const server = http.createServer((req, res) => {
+    res.setHeader('set-cookie', [
+      'a=1; Path=/',
+      'b=2; Expires=Wed, 09 Jun 2027 10:18:14 GMT',
+    ]);
+    res.end('ok');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  const res = await fetchPinned(`http://accessguard-pin-test.invalid:${port}/c`, '127.0.0.1');
+  server.close();
+
+  expect(res.status).toBe(200);
+  expect(res.headers['set-cookie']).toBeUndefined();
+});
+
 test('decompresses a gzip response so the browser gets plain bytes', async () => {
   const { gzipSync } = await import('node:zlib');
   const server = http.createServer((req, res) => {

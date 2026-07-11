@@ -11,7 +11,12 @@ export const app = express();
 // short-circuits), so /pdf is excluded here and gets its own 5mb parser.
 const jsonSmall = express.json({ limit: '1mb' });
 const jsonPdf = express.json({ limit: '5mb' });
-app.use((req, res, next) => (req.path === '/pdf' ? next() : jsonSmall(req, res, next)));
+// Normalize a trailing slash so `POST /pdf/` is treated like `/pdf` here.
+// Express (non-strict routing) routes both spellings to the /pdf handler, so
+// without this the trailing-slash form would fall through to the 1mb parser
+// and silently cap the documented 5mb limit.
+const isPdfPath = (req) => req.path === '/pdf' || req.path === '/pdf/';
+app.use((req, res, next) => (isPdfPath(req) ? next() : jsonSmall(req, res, next)));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -98,6 +103,28 @@ app.post('/pdf', jsonPdf, withBrowserSlot(async (req, res) => {
     res.status(500).json({ error: 'pdf_failed' });
   }
 }));
+
+// JSON error handler (must be last, and must declare 4 args so Express treats
+// it as error middleware). Body-parser failures — invalid JSON or an
+// over-limit body — would otherwise fall through to Express's default handler
+// and return an HTML error page, while every other response here is JSON.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+  const status = err.status || err.statusCode || 500;
+  let code = 'server_error';
+  if (err.type === 'entity.too.large') {
+    code = 'payload_too_large';
+  } else if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+    code = 'invalid_json';
+  }
+  if (status >= 500) {
+    console.error('[accessguard-scanner] request error:', err);
+  }
+  res.status(status).json({ error: code });
+});
 
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
