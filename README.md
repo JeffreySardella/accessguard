@@ -14,7 +14,7 @@ Government and enterprise websites are legally required to meet WCAG 2.2 / Secti
 
 ## Why this exists
 
-Every California state agency (and any organization under Section 508) must prove ongoing accessibility compliance. The detection problem is solved. What isn't solved, in the open-source Drupal world, is the *governance* layer: scanning a whole site continuously, tracking violations over time, blocking bad content from publishing, attributing issues to authors, and producing audit-ready reports.
+Every California state agency (and any organization under Section 508 or the ADA Title II web rule) must keep its sites accessible and show ongoing effort. (The DOJ's ADA Title II rule sets **WCAG 2.1 AA**, with compliance dates — extended in April 2026 — of **April 26, 2027** for populations ≥50k and **April 26, 2028** otherwise.) The *detection* problem is largely solved by axe-core. What isn't solved, in the open-source Drupal world, is the *governance* layer: scanning a whole site continuously, tracking violations over time, blocking regressions from publishing, attributing issues to authors, and producing audit evidence to feed a formal review.
 
 AccessGuard deliberately **does not reinvent detection**. It integrates [axe-core](https://github.com/dequelabs/axe-core), the industry-standard accessibility engine, and builds the accountability system on top. Using the proven engine instead of rebuilding it is an intentional engineering decision.
 
@@ -44,20 +44,24 @@ The Node scanner is intentionally minimal (URL in, violations out). All governan
 
 Lighthouse's accessibility audit *uses axe-core under the hood* (a curated subset of its rules), so this is **not** a claim of a better detection engine. Two things are genuinely different:
 
-1. **Coverage** — AccessGuard runs the full WCAG 2.2 AA ruleset, not a subset.
+1. **Coverage** — AccessGuard runs axe-core's full *automated* WCAG 2.2 A/AA ruleset, where Lighthouse ships a curated subset of it.
 2. **Capability** — this is the real point:
 
 | Capability | Lighthouse | pa11y | AccessGuard |
 |---|:---:|:---:|:---:|
 | Single-page detection | ✅ | ✅ | ✅ |
-| Full WCAG 2.2 AA ruleset | subset | partial | ✅ |
+| Full automated axe ruleset (vs. a subset) | subset | partial | ✅ |
 | Results stored & tracked over time | ❌ | ❌ | ✅ |
-| Site-wide compliance dashboard | ❌ | ❌ | ✅ |
+| Site-wide dashboard | ❌ | ❌ | ✅ |
 | Publish-gating / enforcement | ❌ | ❌ | ✅ |
 | Author attribution | ❌ | ❌ | ✅ |
-| Audit-ready report export | ❌ | ❌ | ✅ |
+| Audit report export | ❌ | ❌ | ✅ |
 
 `benchmark/RESULTS.md` shows a detection sanity check on the demo fixtures (run it yourself: `cd benchmark && npm install && npm run benchmark`). One honest caveat: all six fixtures target rules that are *inside* Lighthouse's axe subset, so the harness demonstrates detection parity on common rules — the full-ruleset coverage advantage (point 1 above) follows from axe's WCAG 2.2 AA ruleset being a superset, not from these fixtures.
+
+### What automated scanning can and can't do
+
+Automated testing is a floor, not a ceiling. axe (like every automated engine) has rules for roughly **23 of the 55 WCAG 2.2 A/AA success criteria (~42%)**, and only a handful comprehensively — it catches an estimated **30–57% of issues**. The rest (captions, meaningful sequence, focus order and visibility, reflow, non-text contrast, error handling, and 6 of the 7 new WCAG 2.2 criteria) require **manual expert review**. A page that passes AccessGuard's gate is free of *automatically-detectable* failures — it is **not** certified WCAG-conformant. AccessGuard's job is to govern and continuously track the automatable layer and route the rest to humans; it feeds a manual audit, it doesn't replace one.
 
 ## Security
 

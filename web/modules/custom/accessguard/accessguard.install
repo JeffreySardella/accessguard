@@ -42,3 +42,11 @@ function accessguard_update_10002() {
     ->setDescription(new TranslatableMarkup('The axe-core version that produced this scan.'));
   $manager->installFieldStorageDefinition('engine_version', 'accessguard_scan', 'accessguard', $definition);
 }
+
+/**
+ * Add the composite (target_entity_id, created, id) index to accessguard_scan.
+ */
+function accessguard_update_10003() {
+  $manager = \Drupal::entityDefinitionUpdateManager();
+  $manager->updateEntityType($manager->getEntityType('accessguard_scan'));
+}

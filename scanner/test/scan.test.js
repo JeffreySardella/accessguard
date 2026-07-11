@@ -1,6 +1,7 @@
 import { runScan } from '../src/scan.js';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
+import os from 'node:os';
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { app } from '../src/server.js';
 import http from 'node:http';
@@ -50,6 +51,74 @@ test('scans an http target end-to-end, fetching subresources through the pinned 
     server.close();
   }
 }, 30000);
+
+test('re-validates subresources: a subresource to a blocked host is aborted', async () => {
+  // The SSRF guard must run on EVERY request, not just the navigation. Load a
+  // local file:// page (navigation bypasses the guard for file:) whose
+  // subresource points at a blocked loopback host, with SCANNER_ALLOW_PRIVATE
+  // unset — the subresource must never reach the canary server.
+  let canaryHit = false;
+  const canary = http.createServer((req, res) => {
+    canaryHit = true;
+    res.end('ok');
+  });
+  await new Promise((resolve) => canary.listen(0, '127.0.0.1', resolve));
+  const canaryPort = canary.address().port;
+
+  const tmpFile = path.join(os.tmpdir(), `accessguard-ssrf-${process.pid}.html`);
+  writeFileSync(
+    tmpFile,
+    `<!doctype html><html lang="en"><head><title>t</title></head><body>`
+    + `<img src="http://127.0.0.1:${canaryPort}/pwn" alt="x">`
+    + `</body></html>`,
+  );
+
+  delete process.env.SCANNER_ALLOW_PRIVATE;
+  try {
+    await runScan('file://' + tmpFile);
+    // Give any in-flight (wrongly-allowed) request a moment to land.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(canaryHit).toBe(false);
+  } finally {
+    unlinkSync(tmpFile);
+    canary.close();
+  }
+}, 30000);
+
+test('caps outbound requests so a page cannot become a DDoS amplifier', async () => {
+  // A page that fires thousands of subresource requests must not be allowed
+  // to flood a target; the scanner caps requests per scan.
+  let served = 0;
+  const html = readFileSync(fixturePath, 'utf8').replace(
+    '</body>',
+    '<script>for (let i = 0; i < 3000; i++) { fetch("/ping/" + i).catch(() => {}); }</script></body>',
+  );
+  const server = http.createServer((req, res) => {
+    if (req.url.startsWith('/ping/')) {
+      served++;
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+    res.setHeader('content-type', 'text/html');
+    res.end(html);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  process.env.SCANNER_ALLOW_PRIVATE = '1';
+  process.env.SCANNER_MAX_REQUESTS = '50';
+  try {
+    await runScan(`http://127.0.0.1:${port}/`);
+    // Far fewer than the 3000 the page attempted — the cap held. Allow slack
+    // for the cap boundary and the navigation/subresource accounting.
+    expect(served).toBeLessThan(200);
+  } finally {
+    delete process.env.SCANNER_ALLOW_PRIVATE;
+    delete process.env.SCANNER_MAX_REQUESTS;
+    server.close();
+  }
+}, 45000);
 
 test('scans a busy page that never reaches network idle', async () => {
   // Long-polling/analytics-style pages never settle to networkidle0; the

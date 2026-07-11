@@ -2,6 +2,7 @@
 
 namespace Drupal\accessguard\Plugin\QueueWorker;
 
+use Drupal\accessguard\Exception\ScannerBusyException;
 use Drupal\accessguard\Service\ScanAccessToken;
 use Drupal\accessguard\Service\ScanRecorder;
 use Drupal\accessguard\Service\ScanRunner;
@@ -57,6 +58,12 @@ class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryP
    * {@inheritdoc}
    */
   public function processItem($data): void {
+    // Normalize the payload once: a malformed (non-array) queue item must not
+    // fatal on the unguarded offset access below.
+    $data = is_array($data) ? $data : [];
+    if (empty($data['nid'])) {
+      return;
+    }
     $node = $this->entityTypeManager->getStorage('node')->load($data['nid']);
     if (!$node) {
       return;
@@ -72,8 +79,16 @@ class AccessguardScanWorker extends QueueWorkerBase implements ContainerFactoryP
     try {
       $result = $this->scanRunner->scan($url);
     }
+    catch (ScannerBusyException $e) {
+      // 503 shed: the scanner is at capacity. Suspend the queue so it retries
+      // next cron, WITHOUT consuming this item's bounded retry budget.
+      $this->loggerFactory->get('accessguard')->info('Scanner busy while scanning node @nid; suspending the queue until next cron.', [
+        '@nid' => $data['nid'],
+      ]);
+      throw new SuspendQueueException($e->getMessage(), 0, $e);
+    }
     catch (\RuntimeException $e) {
-      $this->handleFailure(is_array($data) ? $data : [], $e);
+      $this->handleFailure($data, $e);
       return;
     }
 

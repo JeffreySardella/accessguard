@@ -10,8 +10,24 @@ const axeSource = readFileSync(axePath, 'utf8');
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
-const NAV_TIMEOUT_MS = 20000;
-const AXE_TIMEOUT_MS = 60000;
+// Tunables, read per-call so deployments can override via env without a
+// rebuild (and so tests can set them). Defaults match the prior hardcoded
+// values. The nav+axe budget should stay under the Drupal client's Guzzle
+// timeout so a slow-but-valid scan doesn't get abandoned client-side.
+function limits() {
+  return {
+    navTimeoutMs: Number(process.env.SCANNER_NAV_TIMEOUT_MS) || 20000,
+    axeTimeoutMs: Number(process.env.SCANNER_AXE_TIMEOUT_MS) || 60000,
+    // Per-scan caps on outbound traffic. Without these, an author-controlled
+    // page (a draft scanned with JS enabled) could issue unbounded
+    // fetch()/subresource requests, turning the scanner into a DDoS
+    // amplifier/reflector aimed at any public host from the scanner's IP. axe
+    // needs the rendered DOM, not a thousand beacons, so a generous ceiling is
+    // invisible to real pages.
+    maxRequests: Number(process.env.SCANNER_MAX_REQUESTS) || 500,
+    maxResponseBytes: Number(process.env.SCANNER_MAX_TOTAL_BYTES) || 100 * 1024 * 1024,
+  };
+}
 
 // Errors that describe the *target page* (as opposed to the scanner itself)
 // carry a machine-readable code so the HTTP layer can report them
@@ -25,7 +41,15 @@ function targetError(message, code, extra = {}) {
 }
 
 export async function runScan(url) {
-  const args = ['--no-sandbox', '--disable-setuid-sandbox'];
+  const { navTimeoutMs, axeTimeoutMs, maxRequests, maxResponseBytes } = limits();
+  const args = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    // Containers default to a 64MB /dev/shm; Chromium exhausts it on
+    // non-trivial pages and the renderer crashes (SIGBUS / "Target closed").
+    // Routing shared memory to /tmp is the standard headless-in-Docker fix.
+    '--disable-dev-shm-usage',
+  ];
 
   // Validate the target and pin its resolved IP into the browser, so Chromium
   // connects to the exact address we vetted rather than re-resolving the host
@@ -68,6 +92,8 @@ export async function runScan(url) {
     // swap. Local schemes (file:, data:, about:, blob:) are not network SSRF
     // vectors and pass through.
     const pinnedIps = new Map();
+    let httpRequestCount = 0;
+    let totalResponseBytes = 0;
     await page.setRequestInterception(true);
     page.on('request', async (req) => {
       const reqUrl = req.url();
@@ -76,6 +102,15 @@ export async function runScan(url) {
         // navigation timeout fired) while this event is in flight, continue()
         // rejects, and an unhandled rejection would kill the whole process.
         req.continue().catch(() => {});
+        return;
+      }
+      // Anti-amplification: once a scan has issued too many outbound requests
+      // or pulled too many total bytes, abort the rest. A legitimate page is
+      // far under these ceilings; a malicious page trying to flood a third
+      // party is cut off.
+      httpRequestCount++;
+      if (httpRequestCount > maxRequests || totalResponseBytes > maxResponseBytes) {
+        await req.abort('blockedbyclient').catch(() => {});
         return;
       }
       try {
@@ -93,6 +128,7 @@ export async function runScan(url) {
           headers: req.headers(),
           body: req.postData(),
         });
+        totalResponseBytes += res.body ? res.body.length : 0;
         await req.respond({ status: res.status, headers: res.headers, body: res.body });
       } catch {
         await req.abort('blockedbyclient').catch(() => {});
@@ -105,10 +141,10 @@ export async function runScan(url) {
     // best-effort quiet window.
     let response;
     try {
-      response = await page.goto(url, { waitUntil: 'load', timeout: NAV_TIMEOUT_MS });
+      response = await page.goto(url, { waitUntil: 'load', timeout: navTimeoutMs });
     } catch (err) {
       if (err.name === 'TimeoutError') {
-        throw targetError(`Target did not finish loading within ${NAV_TIMEOUT_MS}ms`, 'navigation_timeout');
+        throw targetError(`Target did not finish loading within ${navTimeoutMs}ms`, 'navigation_timeout');
       }
       throw err;
     }
@@ -148,7 +184,7 @@ export async function runScan(url) {
     axeRun.catch(() => {});
     let timer;
     const deadline = new Promise((unusedResolve, reject) => {
-      timer = setTimeout(() => reject(targetError(`axe-core did not finish within ${AXE_TIMEOUT_MS}ms`, 'axe_timeout')), AXE_TIMEOUT_MS);
+      timer = setTimeout(() => reject(targetError(`axe-core did not finish within ${axeTimeoutMs}ms`, 'axe_timeout')), axeTimeoutMs);
     });
     let axeResult;
     try {

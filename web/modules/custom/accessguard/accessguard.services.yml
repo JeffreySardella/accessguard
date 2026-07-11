@@ -1,4 +1,6 @@
 services:
+  Drupal\accessguard\Hook\RequirementsHooks:
+    arguments: ['@accessguard.scan_runner', '@config.factory']
   accessguard.scan_runner:
     class: Drupal\accessguard\Service\ScanRunner
     arguments: ['@http_client', '@config.factory']

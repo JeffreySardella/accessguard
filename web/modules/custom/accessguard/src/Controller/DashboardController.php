@@ -104,6 +104,13 @@ class DashboardController extends ControllerBase {
       $severityLine = $this->t('@line, Unknown severity: @u', ['@line' => $severityLine, '@u' => $totals['unknown']]);
     }
     $build = [];
+    // Honest scope note: automated scanning covers only part of WCAG, so this
+    // screen tracks the automatable layer, not conformance (see AUDIT-PASS3).
+    $build['disclaimer'] = [
+      '#markup' => '<p class="accessguard-disclaimer"><em>'
+      . $this->t('Automated checks only (axe-core). A clean scan covers roughly a third of WCAG 2.2 AA criteria and is not, by itself, WCAG conformance or legal compliance — the rest requires manual review.')
+      . '</em></p>',
+    ];
     // Explicit h2 so the heading outline is h1 (page title) → h2, rather than
     // jumping to the h3 that item_list's own #title renders (WCAG 1.3.1).
     $build['summary_heading'] = [

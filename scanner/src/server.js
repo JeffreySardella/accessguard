@@ -18,7 +18,21 @@ const jsonPdf = express.json({ limit: '5mb' });
 const isPdfPath = (req) => req.path === '/pdf' || req.path === '/pdf/';
 app.use((req, res, next) => (isPdfPath(req) ? next() : jsonSmall(req, res, next)));
 
+// Liveness: the process is up. Cheap, never launches a browser — a liveness
+// probe that launched Chromium could be killed for slow launch under load.
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+const maxConcurrency = () => Math.max(1, parseInt(process.env.SCANNER_MAX_CONCURRENCY || '3', 10) || 3);
+
+// Readiness: can this instance take another scan right now? Returns 503 when
+// saturated so a load balancer routes elsewhere and the Drupal health probe
+// treats a busy scanner as "retry later" (suspend queue) rather than an
+// item-specific failure that burns the retry budget.
+app.get('/ready', (req, res) => {
+  const max = maxConcurrency();
+  const ready = inFlight < max;
+  res.status(ready ? 200 : 503).json({ ready, in_flight: inFlight, max });
+});
 
 // Every /scan and /pdf request launches a full Chromium (~hundreds of MB), so
 // unbounded concurrency lets a burst of requests OOM the container. Cap
@@ -27,7 +41,7 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 let inFlight = 0;
 function withBrowserSlot(handler) {
   return async (req, res) => {
-    const max = Math.max(1, parseInt(process.env.SCANNER_MAX_CONCURRENCY || '3', 10) || 3);
+    const max = maxConcurrency();
     if (inFlight >= max) {
       return res.status(503).json({ error: 'scanner_busy' });
     }

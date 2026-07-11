@@ -13,6 +13,31 @@ function listen() {
   });
 }
 
+test('GET /ready reports readiness with in_flight/max', async () => {
+  const { server, port } = await listen();
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/ready`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ready).toBe(true);
+    expect(body.max).toBeGreaterThanOrEqual(1);
+    expect(body.in_flight).toBe(0);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /health is liveness-only and always ok', async () => {
+  const { server, port } = await listen();
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/health`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+  } finally {
+    server.close();
+  }
+});
+
 test('malformed JSON returns a JSON 400, not an HTML error page', async () => {
   const { server, port } = await listen();
   try {

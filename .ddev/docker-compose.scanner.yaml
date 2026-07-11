@@ -14,6 +14,10 @@ services:
     # Run an init (tini) as PID 1 so exited Chromium subprocesses are reaped
     # instead of accumulating as zombies. Recommended for production too.
     init: true
+    # Chromium uses shared memory heavily; the container default 64MB /dev/shm
+    # crashes the renderer on non-trivial pages. Raise it (the code also passes
+    # --disable-dev-shm-usage as the portable belt-and-suspenders fix).
+    shm_size: '1gb'
     expose:
       - "3000"
     environment:

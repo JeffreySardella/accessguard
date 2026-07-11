@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\accessguard\Kernel;
 
+use Drupal\accessguard\Exception\ScannerBusyException;
 use Drupal\accessguard\Plugin\QueueWorker\AccessguardScanWorker;
 use Drupal\accessguard\Service\ScanRunner;
 use Drupal\Core\Queue\SuspendQueueException;
@@ -78,6 +79,43 @@ class ScanWorkerTest extends KernelTestBase {
 
     $this->expectException(SuspendQueueException::class);
     $this->createWorker()->processItem(['nid' => (int) $node->id(), 'trigger' => 'cron']);
+  }
+
+  /**
+   * Tests that a 503 busy shed suspends the queue without burning attempts.
+   *
+   * A saturated scanner returning 503 is "retry later," not an item failure;
+   * it must not consume the item's bounded retry budget.
+   */
+  public function testScannerBusySuspendsWithoutBurningAttempts(): void {
+    $node = Node::create(['type' => 'page', 'title' => 't', 'status' => 1]);
+    $node->save();
+    $this->drainQueue();
+    $runner = $this->mockRunner();
+    $runner->method('scan')->willThrowException(new ScannerBusyException('busy'));
+    // isHealthy() must NOT be consulted on the busy path.
+    $runner->expects($this->never())->method('isHealthy');
+    $worker = $this->createWorker();
+
+    $this->expectException(SuspendQueueException::class);
+    try {
+      $worker->processItem(['nid' => (int) $node->id(), 'trigger' => 'cron']);
+    }
+    finally {
+      // The item was not re-enqueued with an incremented attempts counter.
+      $this->assertSame(0, \Drupal::queue('accessguard_scan_queue')->numberOfItems());
+    }
+  }
+
+  /**
+   * Tests that a malformed (non-array) queue item is skipped, not fatal.
+   */
+  public function testMalformedQueueItemIsSkipped(): void {
+    $runner = $this->mockRunner();
+    $runner->expects($this->never())->method('scan');
+    // A string payload must not fatal on $data['nid'].
+    $this->createWorker()->processItem('not-an-array');
+    $this->createWorker()->processItem(['no-nid' => 1]);
   }
 
   /**
