@@ -13,10 +13,19 @@ const REQUEST_TIMEOUT_MS = 20000;
 // longer than REQUEST_TIMEOUT_MS.
 const REQUEST_DEADLINE_MS = 30000;
 
-// Hop-by-hop headers that must not be replayed into the browser's response.
+// Headers that must not be replayed into the browser's response.
+//
+// Beyond the standard hop-by-hop set, `set-cookie` is dropped deliberately:
+// req.respond() takes a flat string->string header map, so multiple cookies
+// would have to be flattened into one field, and a comma join corrupts any
+// cookie whose value contains a comma (e.g. an Expires date). Scans run as an
+// anonymous, single-page, stateless client that never relies on cookie
+// round-trips, so dropping Set-Cookie is both safe and the only way to avoid
+// silently malforming it.
 const STRIP_RESPONSE_HEADERS = new Set([
   'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
   'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-length',
+  'set-cookie',
 ]);
 
 function decodeBody(body, encoding) {
