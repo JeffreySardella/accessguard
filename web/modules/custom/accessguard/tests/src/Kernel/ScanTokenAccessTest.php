@@ -3,6 +3,7 @@
 namespace Drupal\Tests\accessguard\Kernel;
 
 use Drupal\accessguard\Service\ScanAccessToken;
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\KernelTests\KernelTestBase;
@@ -75,6 +76,35 @@ class ScanTokenAccessTest extends KernelTestBase {
 
     $token = \Drupal::service('accessguard.scan_access_token')->generate((int) $node->id());
     $this->assertTrue($this->anonymousViewAccess($node, $token), 'A valid token grants view access.');
+  }
+
+  /**
+   * Tests that a validly-signed token past its expiry is rejected.
+   *
+   * The other tamper test extends the expiry (which breaks the HMAC), so it
+   * only exercises the signature check — this drives the clock forward past a
+   * genuine token's expiry so the expiry check itself is covered. A leaked
+   * scan URL must not stay valid forever.
+   */
+  public function testExpiredTokenIsRejected(): void {
+    $now = 1000000;
+    $clock = $now;
+    $time = $this->createMock(TimeInterface::class);
+    $time->method('getRequestTime')->willReturnCallback(function () use (&$clock) {
+      return $clock;
+    });
+    $service = new ScanAccessToken(
+      \Drupal::service('private_key'),
+      $time,
+      \Drupal::service('config.factory'),
+    );
+
+    $token = $service->generate(5);
+    $this->assertTrue($service->validate(5, $token), 'Fresh token validates.');
+
+    // Advance the clock past the token's lifetime.
+    $clock = $now + 100000;
+    $this->assertFalse($service->validate(5, $token), 'Expired but validly-signed token is rejected.');
   }
 
   /**

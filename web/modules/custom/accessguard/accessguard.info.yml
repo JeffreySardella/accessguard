@@ -1,5 +1,9 @@
 name: AccessGuard
 type: module
-description: 'Section 508 / WCAG compliance governance built on axe-core.'
+description: 'Governance for the automated (axe-core) layer of WCAG accessibility: scan, track, publish-gate, and report.'
 package: Accessibility
 core_version_requirement: ^11
+configure: accessguard.settings_form
+dependencies:
+  - drupal:node
+  - drupal:views
