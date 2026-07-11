@@ -7,6 +7,7 @@ use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\accessguard\Service\WaiverMatcher;
+use Drupal\accessguard\Severity;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
@@ -59,13 +60,11 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       return;
     }
 
-    // axe-core can return a null impact; ScanRecorder stores it as 'unknown'.
-    // Rank unknown alongside moderate so it is gateable (at a moderate or
-    // minor threshold) instead of invisibly passing every gate — an
-    // unrankable violation should not be weaker than the weakest known rank.
-    $rank = ['minor' => 1, 'moderate' => 2, 'unknown' => 2, 'serious' => 3, 'critical' => 4];
+    // The impact taxonomy and its rank order live in Severity (single source
+    // of truth); a null/unknown impact ranks alongside moderate so it stays
+    // gateable rather than invisibly passing every gate.
     $thresholdName = $config->get('gate_threshold') ?: 'critical';
-    $threshold = $rank[$thresholdName] ?? 4;
+    $threshold = Severity::rank($thresholdName) ?: 4;
 
     $scanStorage = $this->entityTypeManager->getStorage('accessguard_scan');
     $ids = $scanStorage->getQuery()
@@ -89,7 +88,7 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
     $blocking = 0;
     foreach ($violations as $v) {
       $impact = $v->get('impact')->value;
-      if (($rank[$impact] ?? 0) < $threshold) {
+      if (Severity::rank($impact) < $threshold) {
         continue;
       }
       $fp = WaiverMatcher::fingerprint(
