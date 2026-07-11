@@ -104,9 +104,13 @@ class DashboardController extends ControllerBase {
       $severityLine = $this->t('@line, Unknown severity: @u', ['@line' => $severityLine, '@u' => $totals['unknown']]);
     }
     $build = [];
+    // Explicit h2 so the heading outline is h1 (page title) → h2, rather than
+    // jumping to the h3 that item_list's own #title renders (WCAG 1.3.1).
+    $build['summary_heading'] = [
+      '#markup' => '<h2>' . $this->t('Compliance summary') . '</h2>',
+    ];
     $build['summary'] = [
       '#theme' => 'item_list',
-      '#title' => $this->t('Compliance summary'),
       '#items' => [
         $this->t('Pages scanned: @n', ['@n' => count($rows)]),
         $this->t('Open violations (latest scans): @n', ['@n' => $totals['open']]),
@@ -116,6 +120,7 @@ class DashboardController extends ControllerBase {
     ];
     $build['table'] = [
       '#type' => 'table',
+      '#caption' => $this->t('Per-page violation summary'),
       '#header' => [
         $this->t('Page'),
         $this->t('Last scan'),

@@ -38,6 +38,7 @@ class AnalyticsController extends ControllerBase {
     return [
       'table' => [
         '#type' => 'table',
+        '#caption' => $this->t('Violations by rule'),
         '#header' => [
           $this->t('Rule'),
           $this->t('Impact'),
@@ -77,6 +78,7 @@ class AnalyticsController extends ControllerBase {
     return [
       'table' => [
         '#type' => 'table',
+        '#caption' => $this->t('Open violations by author'),
         '#header' => [
           $this->t('Author'),
           $this->t('Pages'),

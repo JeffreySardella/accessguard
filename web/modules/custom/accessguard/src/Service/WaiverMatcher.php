@@ -85,7 +85,7 @@ class WaiverMatcher {
     $acquired = $this->lock->acquire($lockName);
     if (!$acquired) {
       $this->lock->wait($lockName, 5);
-      $this->lock->acquire($lockName);
+      $acquired = $this->lock->acquire($lockName);
     }
     try {
       if (isset($this->waivedFingerprints($nid)[self::fingerprint($ruleId, $selector)])) {
@@ -102,7 +102,13 @@ class WaiverMatcher {
       ])->save();
     }
     finally {
-      $this->lock->release($lockName);
+      // Only release a lock we actually hold. If we never acquired it
+      // (sustained >5s contention), we still ran the existence check above as
+      // best-effort dedup rather than blocking the reviewer's action, and a
+      // rare duplicate self-heals on unwaive (deleteWaivers removes all).
+      if ($acquired) {
+        $this->lock->release($lockName);
+      }
     }
   }
 

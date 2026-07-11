@@ -35,7 +35,13 @@ class ReportHtmlBuilder {
     $preparedBy = Html::escape($this->currentUser->getDisplayName());
 
     $parts = [];
-    $parts[] = '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . '</style></head><body>';
+    // The lang and title attributes satisfy WCAG 3.1.1 / 2.4.2 (Level A).
+    // lang is "en" because the report body is authored in English (see the
+    // static strings below); it must state the content's real language, not
+    // the site's UI language.
+    $parts[] = '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+      . '<title>Accessibility audit report — ' . $siteName . '</title>'
+      . '<style>' . $this->css() . '</style></head><body>';
     $parts[] = '<section class="cover"><h1>Accessibility audit report</h1>'
       . '<p class="site">' . $siteName . '</p>'
       . '<p class="meta">Generated ' . Html::escape($date) . ' &middot; Prepared by ' . $preparedBy . '</p></section>';
@@ -85,7 +91,7 @@ class ReportHtmlBuilder {
       $rows = '<tr><td colspan="6">No violations found.</td></tr>';
     }
     return '<section><h2>Violations by rule</h2><table><thead><tr>'
-      . '<th>Rule</th><th>Impact</th><th>WCAG</th><th>Pages</th><th>Open</th><th>Waived</th>'
+      . '<th scope="col">Rule</th><th scope="col">Impact</th><th scope="col">WCAG</th><th scope="col">Pages</th><th scope="col">Open</th><th scope="col">Waived</th>'
       . '</tr></thead><tbody>' . $rows . '</tbody></table></section>';
   }
 
@@ -104,7 +110,7 @@ class ReportHtmlBuilder {
       $rows = '<tr><td colspan="7">No scanned content with a known author.</td></tr>';
     }
     return '<section><h2>Violations by author</h2><table><thead><tr>'
-      . '<th>Author</th><th>Pages</th><th>Critical</th><th>Serious</th><th>Moderate</th><th>Minor</th><th>Waived</th>'
+      . '<th scope="col">Author</th><th scope="col">Pages</th><th scope="col">Critical</th><th scope="col">Serious</th><th scope="col">Moderate</th><th scope="col">Minor</th><th scope="col">Waived</th>'
       . '</tr></thead><tbody>' . $rows . '</tbody></table></section>';
   }
 
@@ -132,7 +138,7 @@ class ReportHtmlBuilder {
         $out .= '<p>No violations in the latest scan.</p></div>';
         continue;
       }
-      $out .= '<table><thead><tr><th>Rule</th><th>Impact</th><th>WCAG</th><th>Selector</th><th>Status</th></tr></thead><tbody>';
+      $out .= '<table><thead><tr><th scope="col">Rule</th><th scope="col">Impact</th><th scope="col">WCAG</th><th scope="col">Selector</th><th scope="col">Status</th></tr></thead><tbody>';
       foreach ($ctx['violations'] as $v) {
         $rule = (string) $v->get('rule_id')->value;
         $selector = (string) $v->get('selector')->value;

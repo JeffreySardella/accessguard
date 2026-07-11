@@ -62,6 +62,42 @@ class ScanRepositoryTest extends KernelTestBase {
     $created = $repo->latestScanCreatedByNode();
     $this->assertSame(2000, $created[7]);
     $this->assertSame(1500, $created[9]);
+
+    $this->assertSame($latest7, $repo->latestScanIdForNode(7));
+    $this->assertNull($repo->latestScanIdForNode(404));
+  }
+
+  /**
+   * Tests that "latest" follows created DESC, id DESC — not MAX(id).
+   *
+   * Under concurrent scanning, a scan with a later id can carry an earlier
+   * `created` (request time). The repository must agree with the gate and
+   * RegressionService, which order by created DESC then id DESC, so the
+   * dashboard doesn't name a different "latest" scan than the gate enforces.
+   */
+  public function testLatestFollowsCreatedThenId(): void {
+    // Insert the later-created scan FIRST (so it gets the lower id), then an
+    // earlier-created scan (higher id). MAX(id) would wrongly pick the second;
+    // created DESC, id DESC correctly picks the first.
+    $laterCreatedLowerId = $this->makeScan(11, 2000);
+    $earlierCreatedHigherId = $this->makeScan(11, 1000);
+    $this->assertGreaterThan($laterCreatedLowerId, $earlierCreatedHigherId);
+
+    $repo = \Drupal::service('accessguard.scan_repository');
+    $this->assertSame($laterCreatedLowerId, $repo->latestScanIdByNode()[11]);
+    $this->assertSame($laterCreatedLowerId, $repo->latestScanIdForNode(11));
+  }
+
+  /**
+   * Tests the same-second tie-break: greatest id wins.
+   */
+  public function testSameSecondTieBreaksById(): void {
+    $this->makeScan(13, 5000);
+    $tieWinner = $this->makeScan(13, 5000);
+
+    $repo = \Drupal::service('accessguard.scan_repository');
+    $this->assertSame($tieWinner, $repo->latestScanIdByNode()[13]);
+    $this->assertSame($tieWinner, $repo->latestScanIdForNode(13));
   }
 
 }
