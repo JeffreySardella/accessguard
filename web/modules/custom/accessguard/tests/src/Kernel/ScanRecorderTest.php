@@ -67,6 +67,34 @@ class ScanRecorderTest extends KernelTestBase {
   }
 
   /**
+   * Tests that needs-review items are recorded and counted separately.
+   */
+  public function testNeedsReviewRecordedSeparately(): void {
+    $result = [
+      'url' => 'http://x/node/8',
+      'violations' => [
+        ['ruleId' => 'image-alt', 'impact' => 'critical', 'selector' => 'img'],
+      ],
+      'needsReview' => [
+        ['ruleId' => 'color-contrast', 'impact' => 'serious', 'selector' => '.hero'],
+        ['ruleId' => 'color-contrast', 'impact' => NULL, 'selector' => '.banner'],
+      ],
+    ];
+    $scan = $this->container->get('accessguard.scan_recorder')->record('node', 8, NULL, 'manual', $result);
+
+    $this->assertSame(1, (int) $scan->get('count_critical')->value);
+    $this->assertSame(2, (int) $scan->get('count_needs_review')->value);
+
+    $vStorage = \Drupal::entityTypeManager()->getStorage('accessguard_violation');
+    $all = $vStorage->loadByProperties(['scan_id' => $scan->id()]);
+    $this->assertCount(3, $all);
+    $confirmed = $vStorage->loadByProperties(['scan_id' => $scan->id(), 'result_type' => 'violation']);
+    $review = $vStorage->loadByProperties(['scan_id' => $scan->id(), 'result_type' => 'needs_review']);
+    $this->assertCount(1, $confirmed);
+    $this->assertCount(2, $review);
+  }
+
+  /**
    * Tests that the axe engine version is persisted on the scan.
    */
   public function testEngineVersionRecorded(): void {

@@ -66,6 +66,10 @@ class AccessguardScan extends ContentEntityBase {
         ->setDefaultValue(0);
     }
 
+    $fields['count_needs_review'] = BaseFieldDefinition::create('integer')
+      ->setLabel(new TranslatableMarkup('Count needs-review'))
+      ->setDefaultValue(0);
+
     $fields['created'] = BaseFieldDefinition::create('created')
       ->setLabel(new TranslatableMarkup('Created'));
 

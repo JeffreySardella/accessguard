@@ -37,6 +37,12 @@ class AccessguardViolation extends ContentEntityBase {
       ->setSetting('target_type', 'accessguard_scan')
       ->setRequired(TRUE);
 
+    // 'violation' (a confirmed axe failure) or 'needs_review' (axe's
+    // "incomplete" bucket — a potential failure requiring human judgement).
+    $fields['result_type'] = BaseFieldDefinition::create('string')
+      ->setLabel(new TranslatableMarkup('Result type'))
+      ->setDefaultValue('violation');
+
     $fields['rule_id'] = BaseFieldDefinition::create('string')
       ->setLabel(new TranslatableMarkup('Rule ID'));
 

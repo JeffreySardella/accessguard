@@ -87,6 +87,25 @@ class PublishGateTest extends KernelTestBase {
   }
 
   /**
+   * Creates a scan whose single finding is a critical needs-review item.
+   */
+  private function makeScanWithNeedsReview(int $nid): void {
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $nid,
+      'status' => 'complete',
+    ]);
+    $scan->save();
+    \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+      'scan_id' => $scan->id(),
+      'result_type' => 'needs_review',
+      'rule_id' => 'color-contrast',
+      'impact' => 'critical',
+      'selector' => '.hero',
+    ])->save();
+  }
+
+  /**
    * Counts the publish-gate constraint violations reported for a node.
    */
   private function countGateViolations(Node $node): int {
@@ -228,6 +247,27 @@ class PublishGateTest extends KernelTestBase {
     // clean. Recording it must unblock the publish transition.
     $this->makeScan((int) $node->id(), 0);
     $this->assertSame(0, $this->countGateViolations($node));
+  }
+
+  /**
+   * Tests that needs-review findings don't block by default, but can opt in.
+   *
+   * The axe "incomplete" results are uncertain, so by default they're surfaced
+   * without blocking; a strict site can enable gate_includes_needs_review.
+   */
+  public function testNeedsReviewGatingIsOptIn(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'needs review', 'status' => 0]);
+    $node->save();
+    $this->makeScanWithNeedsReview((int) $node->id());
+
+    // Default: a critical needs-review finding does NOT block publishing.
+    $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+
+    // Opt in: now it blocks like a critical violation.
+    \Drupal::configFactory()->getEditable('accessguard.settings')
+      ->set('gate_includes_needs_review', TRUE)->save();
+    $this->assertSame(1, $this->countGateViolations($node));
   }
 
   /**

@@ -71,6 +71,7 @@ class DashboardController extends ControllerBase {
       'moderate' => 0,
       'minor' => 0,
       'unknown' => 0,
+      'needs_review' => 0,
       'waived' => 0,
     ];
     $rows = [];
@@ -90,6 +91,7 @@ class DashboardController extends ControllerBase {
         $page['serious'],
         $page['moderate'],
         $page['minor'],
+        $page['needs_review'],
         $page['waived'],
       ];
     }
@@ -122,6 +124,7 @@ class DashboardController extends ControllerBase {
         $this->t('Pages scanned: @n', ['@n' => count($rows)]),
         $this->t('Open violations (latest scans): @n', ['@n' => $totals['open']]),
         $severityLine,
+        $this->t('Needs review (manual check): @n', ['@n' => $totals['needs_review']]),
         $this->t('Waived: @n', ['@n' => $totals['waived']]),
       ],
     ];
@@ -136,6 +139,7 @@ class DashboardController extends ControllerBase {
         $this->t('Serious'),
         $this->t('Moderate'),
         $this->t('Minor'),
+        $this->t('Needs review'),
         $this->t('Waived'),
       ],
       '#rows' => $rows,

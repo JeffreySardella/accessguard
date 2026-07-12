@@ -17,6 +17,9 @@ accessguard.settings:
     gate_threshold:
       type: string
       label: 'Gating severity threshold'
+    gate_includes_needs_review:
+      type: boolean
+      label: 'Also block on needs-review (axe incomplete) findings'
     rescan_enabled:
       type: boolean
       label: 'Enable cron re-scanning'

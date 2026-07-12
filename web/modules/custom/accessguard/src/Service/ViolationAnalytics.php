@@ -19,7 +19,7 @@ class ViolationAnalytics {
   /**
    * Memoized per-node context, built on first call to accessibleScans().
    *
-   * @var array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>|null
+   * @var array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, needs_review:array, waived:array<string,string>, waiver_reasons:array<string,string>}>|null
    */
   protected ?array $scanContextCache = NULL;
 
@@ -121,7 +121,7 @@ class ViolationAnalytics {
    * summary — not the raw stored per-scan counts (which include waived
    * violations and omit unknown-impact ones).
    *
-   * @return array<int, array{nid:int, created:int, open:int, critical:int, serious:int, moderate:int, minor:int, unknown:int, waived:int}>
+   * @return array<int, array{nid:int, created:int, open:int, critical:int, serious:int, moderate:int, minor:int, unknown:int, needs_review:int, waived:int}>
    *   Per-node counts for each latest scan the current user may view.
    */
   public function byPage(): array {
@@ -131,7 +131,7 @@ class ViolationAnalytics {
         'nid' => $ctx['nid'],
         'created' => $ctx['created'],
         'open' => 0,
-      ] + Severity::zeroCounts() + ['unknown' => 0, 'waived' => 0];
+      ] + Severity::zeroCounts() + ['unknown' => 0, 'needs_review' => 0, 'waived' => 0];
       foreach ($ctx['violations'] as $v) {
         $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
         if (isset($ctx['waived'][$fp])) {
@@ -142,6 +142,14 @@ class ViolationAnalytics {
         $impact = Severity::normalize((string) $v->get('impact')->value);
         $row[$impact]++;
       }
+      foreach ($ctx['needs_review'] ?? [] as $v) {
+        $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
+        if (isset($ctx['waived'][$fp])) {
+          $row['waived']++;
+          continue;
+        }
+        $row['needs_review']++;
+      }
       $pages[$ctx['nid']] = $row;
     }
     return $pages;
@@ -150,11 +158,11 @@ class ViolationAnalytics {
   /**
    * Open-violation totals across accessible nodes.
    *
-   * @return array{pages:int, open:int, critical:int, serious:int, moderate:int, minor:int}
+   * @return array{pages:int, open:int, needs_review:int, critical:int, serious:int, moderate:int, minor:int}
    *   Totals across accessible nodes.
    */
   public function summary(): array {
-    $out = ['pages' => 0, 'open' => 0] + Severity::zeroCounts();
+    $out = ['pages' => 0, 'open' => 0, 'needs_review' => 0] + Severity::zeroCounts();
     foreach ($this->accessibleScans() as $ctx) {
       $out['pages']++;
       foreach ($ctx['violations'] as $v) {
@@ -168,6 +176,12 @@ class ViolationAnalytics {
           $out[$impact]++;
         }
       }
+      foreach ($ctx['needs_review'] ?? [] as $v) {
+        $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
+        if (!isset($ctx['waived'][$fp])) {
+          $out['needs_review']++;
+        }
+      }
     }
     return $out;
   }
@@ -179,7 +193,7 @@ class ViolationAnalytics {
    * $scanContextCache, since the underlying node/violation/waiver lookups
    * are identical on every call within the same request.
    *
-   * @return \Generator<array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
+   * @return \Generator<array{nid:int, created:int, url:string, author_uid:?int, violations:array, needs_review:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   protected function accessibleScans(): \Generator {
@@ -192,7 +206,7 @@ class ViolationAnalytics {
    * Public so the CSV export and the PDF report builder can iterate the same
    * batched, access-filtered data instead of re-querying per node.
    *
-   * @return array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
+   * @return array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, needs_review:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   public function latestScanContexts(): array {
@@ -206,7 +220,7 @@ class ViolationAnalytics {
    * waivers each — so reporting cost doesn't grow to N-queries-per-node on
    * sites with many scanned pages.
    *
-   * @return array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
+   * @return array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, needs_review:array, waived:array<string,string>, waiver_reasons:array<string,string>}>
    *   Per-node context for each latest scan the current user may view.
    */
   protected function buildScanContext(): array {
@@ -250,12 +264,25 @@ class ViolationAnalytics {
     foreach ($accessible as $scanId => $scan) {
       $nid = (int) $scan->get('target_entity_id')->value;
       $nodeWaivers = $waivers[$nid] ?? [];
+      // Split confirmed violations from needs-review items so the gate, counts,
+      // and analytics can treat them separately (needs-review is uncertain).
+      $confirmed = [];
+      $needsReview = [];
+      foreach ($violationsByScan[$scanId] ?? [] as $v) {
+        if ($v->get('result_type')->value === 'needs_review') {
+          $needsReview[] = $v;
+        }
+        else {
+          $confirmed[] = $v;
+        }
+      }
       $context[] = [
         'nid' => $nid,
         'created' => (int) $scan->get('created')->value,
         'url' => (string) $scan->get('url')->value,
         'author_uid' => $scan->get('content_author')->target_id ? (int) $scan->get('content_author')->target_id : NULL,
-        'violations' => $violationsByScan[$scanId] ?? [],
+        'violations' => $confirmed,
+        'needs_review' => $needsReview,
         'waived' => array_map(fn(array $w) => $w['status'], $nodeWaivers),
         'waiver_reasons' => array_map(fn(array $w) => $w['reason'], $nodeWaivers),
       ];

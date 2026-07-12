@@ -174,9 +174,17 @@ export async function runScan(url) {
     // timeout), long after the Drupal client has given up.
     const axeRun = page.evaluate(async (tags) => {
       const results = await window.axe.run(document, { runOnly: { type: 'tag', values: tags } });
-      // Report the engine version so the module can detect when scans (and
-      // thus waiver/regression continuity) span an axe-core upgrade.
-      return { violations: results.violations, engineVersion: window.axe.version };
+      // Capture `incomplete` ("needs review") alongside `violations`. axe puts
+      // genuine potential failures it can't decide automatically here — e.g.
+      // color-contrast over a background image/gradient, or a control named
+      // only via title — so dropping them silently lets real issues pass.
+      // Report the engine version too so the module can detect when scans
+      // (and thus waiver/regression continuity) span an axe-core upgrade.
+      return {
+        violations: results.violations,
+        incomplete: results.incomplete,
+        engineVersion: window.axe.version,
+      };
     }, TAGS);
     // If the deadline wins, the evaluate rejects later during browser
     // teardown; the no-op catch keeps that from becoming an unhandled
@@ -193,23 +201,32 @@ export async function runScan(url) {
       clearTimeout(timer);
     }
 
-    const violations = [];
-    for (const v of axeResult.violations) {
-      const wcag = v.tags.find((t) => /^wcag\d{3,}$/.test(t))
-        || v.tags.find((t) => /^wcag/.test(t))
-        || null;
-      for (const node of v.nodes) {
-        violations.push({
-          ruleId: v.id,
-          impact: v.impact,
-          wcagCriterion: wcag,
-          selector: Array.isArray(node.target) ? node.target.join(' ') : String(node.target),
-          html: node.html,
-          helpUrl: v.helpUrl,
-        });
+    const flatten = (results) => {
+      const out = [];
+      for (const v of results || []) {
+        const wcag = v.tags.find((t) => /^wcag\d{3,}$/.test(t))
+          || v.tags.find((t) => /^wcag/.test(t))
+          || null;
+        for (const node of v.nodes) {
+          out.push({
+            ruleId: v.id,
+            impact: v.impact,
+            wcagCriterion: wcag,
+            selector: Array.isArray(node.target) ? node.target.join(' ') : String(node.target),
+            html: node.html,
+            helpUrl: v.helpUrl,
+          });
+        }
       }
-    }
-    return { url, violations, engineVersion: axeResult.engineVersion };
+      return out;
+    };
+
+    return {
+      url,
+      violations: flatten(axeResult.violations),
+      needsReview: flatten(axeResult.incomplete),
+      engineVersion: axeResult.engineVersion,
+    };
   } finally {
     await browser.close();
   }

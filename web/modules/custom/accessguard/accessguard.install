@@ -50,3 +50,18 @@ function accessguard_update_10003() {
   $manager = \Drupal::entityDefinitionUpdateManager();
   $manager->updateEntityType($manager->getEntityType('accessguard_scan'));
 }
+
+/**
+ * Add needs-review support: violation.result_type and scan.count_needs_review.
+ */
+function accessguard_update_10004() {
+  $manager = \Drupal::entityDefinitionUpdateManager();
+  $result_type = BaseFieldDefinition::create('string')
+    ->setLabel(new TranslatableMarkup('Result type'))
+    ->setDefaultValue('violation');
+  $manager->installFieldStorageDefinition('result_type', 'accessguard_violation', 'accessguard', $result_type);
+  $count = BaseFieldDefinition::create('integer')
+    ->setLabel(new TranslatableMarkup('Count needs-review'))
+    ->setDefaultValue(0);
+  $manager->installFieldStorageDefinition('count_needs_review', 'accessguard_scan', 'accessguard', $count);
+}

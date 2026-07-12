@@ -19,6 +19,9 @@ test('flags an image with no alt text', async () => {
   // The axe engine version is reported so the module can detect scans that
   // span an engine upgrade.
   expect(result.engineVersion).toMatch(/^\d+\.\d+\.\d+/);
+  // The scan returns axe's "needs review" (incomplete) bucket alongside
+  // violations so the module can surface it rather than dropping it.
+  expect(Array.isArray(result.needsReview)).toBe(true);
 }, 30000);
 
 test('scans an http target end-to-end, fetching subresources through the pinned path', async () => {
