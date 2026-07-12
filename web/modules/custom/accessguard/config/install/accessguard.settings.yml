@@ -3,6 +3,7 @@ scanner_auth_token: ''
 scan_base_url: ''
 gate_enabled: true
 gate_threshold: 'critical'
+gate_includes_needs_review: false
 rescan_enabled: true
 rescan_interval: 86400
 rescan_batch: 25

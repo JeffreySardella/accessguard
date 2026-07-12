@@ -81,12 +81,20 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
     }
     $scanId = reset($ids);
 
+    // "Needs review" (axe incomplete) findings are uncertain by definition, so
+    // by default they don't block publishing — only surface for human review.
+    // Strict sites can opt in via gate_includes_needs_review.
+    $includeNeedsReview = (bool) $config->get('gate_includes_needs_review');
+
     $waived = $this->waiverMatcher->waivedFingerprints((int) $entity->id());
     $violationStorage = $this->entityTypeManager->getStorage('accessguard_violation');
     $violations = $violationStorage->loadByProperties(['scan_id' => $scanId]);
 
     $blocking = 0;
     foreach ($violations as $v) {
+      if (!$includeNeedsReview && $v->get('result_type')->value === 'needs_review') {
+        continue;
+      }
       $impact = $v->get('impact')->value;
       if (Severity::rank($impact) < $threshold) {
         continue;

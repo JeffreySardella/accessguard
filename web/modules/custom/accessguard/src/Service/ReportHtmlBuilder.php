@@ -93,7 +93,8 @@ class ReportHtmlBuilder {
       . '<li>Pages scanned: ' . (int) $s['pages'] . '</li>'
       . '<li>Total open violations: ' . (int) $s['open'] . '</li>'
       . '<li>Critical: ' . (int) $s['critical'] . ', Serious: ' . (int) $s['serious']
-      . ', Moderate: ' . (int) $s['moderate'] . ', Minor: ' . (int) $s['minor'] . '</li></ul></section>';
+      . ', Moderate: ' . (int) $s['moderate'] . ', Minor: ' . (int) $s['minor'] . '</li>'
+      . '<li>Needs review (manual check required): ' . (int) ($s['needs_review'] ?? 0) . '</li></ul></section>';
   }
 
   /**

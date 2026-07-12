@@ -32,6 +32,7 @@ class ScanRecorder {
    */
   public function record(string $entityType, int $entityId, ?int $authorUid, string $triggeredBy, array $scanResult) {
     $violations = $scanResult['violations'] ?? [];
+    $needsReview = $scanResult['needsReview'] ?? [];
     $counts = Severity::zeroCounts();
     $normalizedImpacts = [];
     foreach ($violations as $key => $v) {
@@ -57,6 +58,7 @@ class ScanRecorder {
         'count_serious' => $counts['serious'],
         'count_moderate' => $counts['moderate'],
         'count_minor' => $counts['minor'],
+        'count_needs_review' => count($needsReview),
       ]);
       $scan->save();
 
@@ -64,8 +66,24 @@ class ScanRecorder {
       foreach ($violations as $key => $v) {
         $vStorage->create([
           'scan_id' => $scan->id(),
+          'result_type' => 'violation',
           'rule_id' => $v['ruleId'] ?? '',
           'impact' => $normalizedImpacts[$key],
+          'wcag_criterion' => $v['wcagCriterion'] ?? '',
+          'selector' => $this->cap($v['selector'] ?? ''),
+          'html_snippet' => $v['html'] ?? '',
+          'help_url' => $this->cap($v['helpUrl'] ?? ''),
+        ])->save();
+      }
+      // "Needs review" items are stored as violation rows tagged
+      // needs_review, so waivers, the detail view, and analytics can treat
+      // them uniformly while the gate and counts keep them separate.
+      foreach ($needsReview as $v) {
+        $vStorage->create([
+          'scan_id' => $scan->id(),
+          'result_type' => 'needs_review',
+          'rule_id' => $v['ruleId'] ?? '',
+          'impact' => Severity::normalize($v['impact'] ?? NULL),
           'wcag_criterion' => $v['wcagCriterion'] ?? '',
           'selector' => $this->cap($v['selector'] ?? ''),
           'html_snippet' => $v['html'] ?? '',

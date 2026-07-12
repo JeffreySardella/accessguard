@@ -78,6 +78,12 @@ class SettingsForm extends ConfigFormBase {
       ],
       '#default_value' => $config->get('gate_threshold') ?: 'critical',
     ];
+    $form['gate_includes_needs_review'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Also block on needs-review findings'),
+      '#description' => $this->t('axe reports some potential failures as "needs review" (e.g. contrast over a background image) because it cannot decide automatically. By default these are surfaced but do not block publishing; enable this to gate on them too (stricter, but may block on uncertain findings).'),
+      '#default_value' => (bool) $config->get('gate_includes_needs_review'),
+    ];
     $form['rescan_enabled'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable cron re-scanning'),
@@ -141,6 +147,7 @@ class SettingsForm extends ConfigFormBase {
       ->set('scan_base_url', trim((string) $form_state->getValue('scan_base_url')))
       ->set('gate_enabled', (bool) $form_state->getValue('gate_enabled'))
       ->set('gate_threshold', $form_state->getValue('gate_threshold'))
+      ->set('gate_includes_needs_review', (bool) $form_state->getValue('gate_includes_needs_review'))
       ->set('rescan_enabled', (bool) $form_state->getValue('rescan_enabled'))
       ->set('rescan_interval', (int) $form_state->getValue('rescan_interval'))
       ->set('rescan_batch', (int) $form_state->getValue('rescan_batch'))

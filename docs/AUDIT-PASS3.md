@@ -87,8 +87,10 @@ The competitive, legal, and WCAG-coverage investigations independently reached t
 8. Security test gaps: token expiry, subresource-SSRF re-validation.
 9. `Severity` value object extraction; DESIGN.md refresh.
 
+> **Remediation status (2026-07-11):** Phase A fixes merged (PRs #7, #8), including the `Severity` value-object extraction. **Detection completeness — the `incomplete`/needs-review half — is now done too:** the scanner captures axe's `incomplete` bucket, it's stored as `needs_review`-typed violations with a `count_needs_review`, surfaced on the dashboard and PDF, and gated only when the new `gate_includes_needs_review` config flag is on (default off — surface-only, no silent gate-tightening). The remaining detection item (iframe scanning via `@axe-core/puppeteer`) and the rest of Phase B are still open.
+
 **Phase B — product decisions (need the owner's call):**
-- Detection completeness via `@axe-core/puppeteer` (iframes + `incomplete`/needs-review) — and whether needs-review gates publishing (recommend surface-only, config flag).
+- Detection completeness: the `incomplete`/needs-review piece is done (see remediation note above). Still open: **iframe scanning** via `@axe-core/puppeteer` (a larger change that re-integrates with the SSRF interception layer).
 - Dashboard scale rework (SQL counts + pagination); parallel queue consumers + concurrency; retention default; state-array → table.
 - VPAT/ACR-shaped export + manual-attestation workflow (the biggest product bet; the competitive/legal tracks both rank it the top category gap).
 - Domain events; `entity_reference` target migration; waiver audit-trail durability; multilingual/translation scanning; ticketing hook.
