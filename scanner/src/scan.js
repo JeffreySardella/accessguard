@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { withBrowserContext } from './browserPool.js';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAndAssert } from './urlGuard.js';
@@ -42,41 +42,8 @@ function targetError(message, code, extra = {}) {
 
 export async function runScan(url) {
   const { navTimeoutMs, axeTimeoutMs, maxRequests, maxResponseBytes } = limits();
-  const args = [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    // Containers default to a 64MB /dev/shm; Chromium exhausts it on
-    // non-trivial pages and the renderer crashes (SIGBUS / "Target closed").
-    // Routing shared memory to /tmp is the standard headless-in-Docker fix.
-    '--disable-dev-shm-usage',
-  ];
-
-  // Validate the target and pin its resolved IP into the browser, so Chromium
-  // connects to the exact address we vetted rather than re-resolving the host
-  // (which a DNS-rebinding attack could answer differently). Skipped for
-  // non-http targets such as file:// (used by tests and the benchmark).
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    parsed = null;
-  }
-  if (parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
-    const { hostname, ip } = await resolveAndAssert(url);
-    if (ip) {
-      // Chromium's host-resolver-rules parser wants IPv6 replacements
-      // bracketed; an unbracketed v6 rule is silently ignored.
-      const target = ip.includes(':') ? `[${ip}]` : ip;
-      args.push(`--host-resolver-rules=MAP ${hostname} ${target}`);
-    }
-  }
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    args,
-  });
-  try {
-    const page = await browser.newPage();
+  return withBrowserContext(async (context) => {
+    const page = await context.newPage();
     // The scanner injects axe-core with page.evaluate(); a target whose CSP
     // lacks 'unsafe-eval' would otherwise fail injection — penalizing exactly
     // the security-conscious sites. Safe here: every response is fetched and
@@ -227,7 +194,5 @@ export async function runScan(url) {
       needsReview: flatten(axeResult.incomplete),
       engineVersion: axeResult.engineVersion,
     };
-  } finally {
-    await browser.close();
-  }
+  });
 }

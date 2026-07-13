@@ -5,6 +5,11 @@ import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { app } from '../src/server.js';
 import http from 'node:http';
+import { closeSharedBrowser } from '../src/browserPool.js';
+
+afterAll(async () => {
+  await closeSharedBrowser();
+});
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixturePath = path.join(dir, 'fixtures', 'missing-alt.html');
@@ -257,3 +262,39 @@ test('POST /scan rejects a non-http scheme (SSRF guard)', async () => {
   server.close();
   expect(res.status).toBe(400);
 });
+
+test('a scanned page cannot open a hostname-based WebSocket to the network', async () => {
+  // Security invariant (a forward regression guard, not a diff of this change):
+  // a scanned page must not reach the network via a hostname WebSocket.
+  // WebSockets bypass page request interception entirely, so the browser's DNS
+  // posture is the only thing between the page and ws://internal-host; the
+  // shared pooled browser maps every hostname to NOTFOUND. This assertion also
+  // held under the old per-request browser because a file:// scan tears down
+  // before the handshake completes — so it is not a RED→GREEN proof of the
+  // NOTFOUND rule. That the rule is what enforces this was verified out of
+  // band: with a 2s window a plain browser lets ws://localhost connect, and
+  // adding MAP * ~NOTFOUND makes it fail with ERR_NAME_NOT_RESOLVED.
+  // (IP-literal WebSockets skip DNS and remain possible — resolver rules only
+  // govern hostnames.)
+  let touched = false;
+  const canary = http.createServer(() => {});
+  canary.on('connection', () => { touched = true; });
+  // Dual-stack listen (no host): on Windows `localhost` resolves IPv6-first,
+  // so an IPv4-only canary would miss the connection entirely.
+  await new Promise((resolve) => canary.listen(0, resolve));
+  const port = canary.address().port;
+
+  const wsFixture = path.join(os.tmpdir(), `accessguard-ws-${Date.now()}.html`);
+  writeFileSync(wsFixture, `<!doctype html><html><body><h1>x</h1>
+    <script>try { new WebSocket('ws://localhost:${port}/'); } catch (e) {}</script>
+    </body></html>`);
+  try {
+    await runScan('file://' + wsFixture.replace(/\\/g, '/'));
+    // Give a would-be connection time to land on the canary.
+    await new Promise((r) => setTimeout(r, 500));
+    expect(touched).toBe(false);
+  } finally {
+    unlinkSync(wsFixture);
+    canary.close();
+  }
+}, 30000);
