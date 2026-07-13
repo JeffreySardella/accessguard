@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\accessguard\Unit;
 
+use Drupal\accessguard\Exception\ReportTooLargeException;
 use Drupal\accessguard\Service\PdfClient;
 use Drupal\Tests\UnitTestCase;
 use GuzzleHttp\Client;
@@ -51,6 +52,28 @@ class PdfClientTest extends UnitTestCase {
     $config = $this->getConfigFactoryStub(['accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000']]);
     $this->expectException(\RuntimeException::class);
     (new PdfClient($client, $config))->render('<h1>x</h1>');
+  }
+
+  /**
+   * Tests an oversized report throws a distinct error without an HTTP call.
+   *
+   * The scanner caps /pdf request bodies at 5mb; posting a bigger report
+   * would 413 and read as "scanner down". Failing fast with a distinct
+   * exception lets the controller tell the user what actually happened.
+   */
+  public function testOversizedReportThrowsWithoutRequest(): void {
+    $mock = new MockHandler([new Response(200, ['Content-Type' => 'application/pdf'], '%PDF-1.4 body')]);
+    $client = new Client(['handler' => HandlerStack::create($mock)]);
+    $config = $this->getConfigFactoryStub(['accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000']]);
+    $html = str_repeat('a', PdfClient::MAX_REPORT_BYTES + 1);
+    try {
+      (new PdfClient($client, $config))->render($html);
+      $this->fail('Expected ReportTooLargeException.');
+    }
+    catch (ReportTooLargeException $e) {
+      // The queued mock response must still be unconsumed: no request went out.
+      $this->assertSame(1, $mock->count());
+    }
   }
 
   /**

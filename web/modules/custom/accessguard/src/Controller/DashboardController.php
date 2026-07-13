@@ -3,6 +3,7 @@
 namespace Drupal\accessguard\Controller;
 
 use Drupal\accessguard\Csv\CsvSafe;
+use Drupal\accessguard\Exception\ReportTooLargeException;
 use Drupal\accessguard\Repository\ScanRepository;
 use Drupal\accessguard\Service\PdfClient;
 use Drupal\accessguard\Service\RegressionService;
@@ -234,12 +235,15 @@ class DashboardController extends ControllerBase {
    * dashboard with an error and the CSV export remains available.
    */
   public function exportPdf() {
-    $html = $this->reportHtmlBuilder->build();
     try {
+      $html = $this->reportHtmlBuilder->build();
       $pdf = $this->pdfClient->render($html);
     }
     catch (\Throwable $e) {
-      $this->messenger()->addError($this->t('PDF export requires the scanner service to be running. CSV export is still available.'));
+      $this->getLogger('accessguard')->error('PDF export failed: @message', ['@message' => $e->getMessage()]);
+      $this->messenger()->addError($e instanceof ReportTooLargeException
+        ? $this->t('The audit report is too large to render as a PDF. Use the CSV export instead.')
+        : $this->t('PDF export failed — the scanner service may be down or misconfigured (details are in the site log). CSV export is still available.'));
       return new RedirectResponse(Url::fromRoute('accessguard.dashboard')->toString());
     }
     $response = new Response($pdf);
