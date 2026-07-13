@@ -3,6 +3,7 @@ import { timingSafeEqual, createHash } from 'node:crypto';
 import { runScan } from './scan.js';
 import { assertUrlAllowed } from './urlGuard.js';
 import { renderPdf } from './pdf.js';
+import { closeSharedBrowser } from './browserPool.js';
 
 export const app = express();
 // Each route declares its own JSON parser: /pdf needs a larger ceiling for
@@ -155,7 +156,9 @@ if (process.env.NODE_ENV !== 'test') {
   for (const signal of ['SIGTERM', 'SIGINT']) {
     process.on(signal, () => {
       console.log(`[accessguard-scanner] ${signal} received, draining…`);
-      server.close(() => process.exit(0));
+      server.close(() => {
+        closeSharedBrowser().finally(() => process.exit(0));
+      });
       setTimeout(() => process.exit(0), 10000).unref();
     });
   }

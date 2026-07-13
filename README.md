@@ -94,7 +94,7 @@ You should see all six demo pages, each with the accessibility violation it was 
 
 ## What's built
 
-- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard, plus a PDF-rendering endpoint for audit reports. 37 tests.
+- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard, plus a PDF-rendering endpoint for audit reports, with a concurrency-capped shared-browser pool (per-request isolated contexts, crash recovery, idle teardown via `SCANNER_BROWSER_IDLE_MS`). 37 tests.
 - **`accessguard` module**
   - `accessguard_scan` and `accessguard_violation` entities
   - `ScanRunner` (calls the scanner), `ScanRecorder` (persists results), and `RegressionService` (diffs a node's two latest scans) services
@@ -124,10 +124,6 @@ You should see all six demo pages, each with the accessibility violation it was 
 ![Settings form](docs/images/settings.png)
 
 A sample exported audit report is at [`docs/sample-audit.csv`](docs/sample-audit.csv).
-
-## Roadmap
-
-- Concurrency-limited browser pooling in the scanner (reuse instances under load).
 
 ## Tech stack
 
