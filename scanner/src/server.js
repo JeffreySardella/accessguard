@@ -5,18 +5,13 @@ import { assertUrlAllowed } from './urlGuard.js';
 import { renderPdf } from './pdf.js';
 
 export const app = express();
-// Parse JSON globally at 1mb, EXCEPT /pdf, which needs a larger ceiling for
-// full-report HTML. A single global parser would win regardless of any
-// route-level parser (body-parser marks the body read, and a later parser
-// short-circuits), so /pdf is excluded here and gets its own 5mb parser.
+// Each route declares its own JSON parser: /pdf needs a larger ceiling for
+// full-report HTML, and a per-route parser applies on every spelling
+// Express's lax matching accepts (/pdf/, /PDF) — a path-sniffing global
+// parser has to enumerate those spellings by hand and silently caps the
+// limit on any it misses.
 const jsonSmall = express.json({ limit: '1mb' });
 const jsonPdf = express.json({ limit: '5mb' });
-// Normalize a trailing slash so `POST /pdf/` is treated like `/pdf` here.
-// Express (non-strict routing) routes both spellings to the /pdf handler, so
-// without this the trailing-slash form would fall through to the 1mb parser
-// and silently cap the documented 5mb limit.
-const isPdfPath = (req) => req.path === '/pdf' || req.path === '/pdf/';
-app.use((req, res, next) => (isPdfPath(req) ? next() : jsonSmall(req, res, next)));
 
 // Liveness: the process is up. Cheap, never launches a browser — a liveness
 // probe that launched Chromium could be killed for slow launch under load.
@@ -67,10 +62,17 @@ function isAuthorized(req) {
   return timingSafeEqual(a, b);
 }
 
-app.post('/scan', withBrowserSlot(async (req, res) => {
+// Runs before the body parsers and the browser-slot gate so a tokenless
+// client can't force the server to buffer megabytes of payload (or consume
+// a browser slot) just to be told 401.
+function requireAuth(req, res, next) {
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
+  next();
+}
+
+app.post('/scan', requireAuth, jsonSmall, withBrowserSlot(async (req, res) => {
   const { url } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'Missing required "url" string.' });
@@ -100,10 +102,7 @@ app.post('/scan', withBrowserSlot(async (req, res) => {
   }
 }));
 
-app.post('/pdf', jsonPdf, withBrowserSlot(async (req, res) => {
-  if (!isAuthorized(req)) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+app.post('/pdf', requireAuth, jsonPdf, withBrowserSlot(async (req, res) => {
   const { html } = req.body || {};
   if (!html || typeof html !== 'string') {
     return res.status(400).json({ error: 'invalid_html' });

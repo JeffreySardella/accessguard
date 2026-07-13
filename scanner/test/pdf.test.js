@@ -98,6 +98,60 @@ test('POST /pdf does not let a remote <iframe> reach the network', async () => {
   }
 }, 30000);
 
+test('POST /pdf/ (trailing slash) gets the same 5mb limit as /pdf', async () => {
+  const { server, port } = listen();
+  try {
+    const big = '<p>' + 'a'.repeat(1500000) + '</p>';
+    const html = `<!doctype html><html><body><h1>Audit</h1>${big}</body></html>`;
+    const res = await fetch(`http://127.0.0.1:${port}/pdf/`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    expect(res.status).toBe(200);
+  } finally {
+    server.close();
+  }
+}, 30000);
+
+test('POST /PDF (uppercase) gets the same 5mb limit as /pdf', async () => {
+  // Express routes case-insensitively, so /PDF reaches the /pdf handler; the
+  // body parser picked for it must be the 5mb one too.
+  const { server, port } = listen();
+  try {
+    const big = '<p>' + 'a'.repeat(1500000) + '</p>';
+    const html = `<!doctype html><html><body><h1>Audit</h1>${big}</body></html>`;
+    const res = await fetch(`http://127.0.0.1:${port}/PDF`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    expect(res.status).toBe(200);
+  } finally {
+    server.close();
+  }
+}, 30000);
+
+test('unauthorized requests are rejected before the body is parsed', async () => {
+  // With a token configured, a tokenless client must get 401 without the
+  // server first buffering/parsing its payload — otherwise anyone can force
+  // megabytes of buffering per request. A 2mb body to /scan distinguishes
+  // the orders: parser-first answers 413, auth-first answers 401.
+  process.env.SCANNER_AUTH_TOKEN = 'sekret';
+  const { server, port } = listen();
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/scan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'http://example.com/' + 'a'.repeat(2000000) }),
+    });
+    expect(res.status).toBe(401);
+  } finally {
+    delete process.env.SCANNER_AUTH_TOKEN;
+    server.close();
+  }
+});
+
 test('POST /pdf accepts a body larger than the 1mb /scan limit', async () => {
   const { server, port } = listen();
   try {
