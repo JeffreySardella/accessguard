@@ -88,6 +88,46 @@ class ReportHtmlBuilderTest extends KernelTestBase {
   }
 
   /**
+   * Tests the summary reports waived and unknown-severity counts.
+   *
+   * The open total must be explainable from the report itself: waived items
+   * get their own line and non-standard impacts land in an Unknown bucket
+   * instead of making the total exceed the sum of the severity counts.
+   */
+  public function testSummaryShowsWaivedAndUnknownCounts(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'Homepage', 'status' => 1]);
+    $node->save();
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'status' => 'complete',
+    ]);
+    $scan->save();
+    $violationStorage = \Drupal::entityTypeManager()->getStorage('accessguard_violation');
+    $violationStorage->create([
+      'scan_id' => $scan->id(),
+      'rule_id' => 'image-alt',
+      'impact' => 'critical',
+      'selector' => 'img',
+    ])->save();
+    $violationStorage->create([
+      'scan_id' => $scan->id(),
+      'rule_id' => 'custom-rule',
+      'impact' => 'unknown',
+      'selector' => 'div',
+    ])->save();
+    \Drupal::service('accessguard.waiver_matcher')
+      ->createWaiver((int) $node->id(), 'image-alt', 'img', 'false_positive', 'decorative', 1);
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $html = \Drupal::service('accessguard.report_html_builder')->build();
+
+    $this->assertStringContainsString('Total open violations: 1', $html);
+    $this->assertStringContainsString('Waived: 1', $html);
+    $this->assertStringContainsString('Unknown severity: 1', $html);
+  }
+
+  /**
    * Tests markup in a node title is escaped, not emitted raw.
    */
   public function testTitleIsEscaped(): void {

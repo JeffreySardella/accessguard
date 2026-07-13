@@ -128,6 +128,94 @@ class ViolationAnalyticsTest extends KernelTestBase {
   }
 
   /**
+   * Tests the summary buckets every impact and reports the waived count.
+   *
+   * An impact outside the four standard severities (ScanRecorder stores
+   * 'unknown' for those) must land in an "unknown" bucket, so the open total
+   * always equals the sum of the per-severity lines in the report.
+   */
+  public function testSummaryBucketsEveryImpactAndCountsWaived(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'A', 'status' => 1]);
+    $node->save();
+    $scan = $this->makeScan((int) $node->id());
+    $this->addViolation($scan, 'image-alt', 'critical', 'img');
+    $this->addViolation($scan, 'custom-rule', 'unknown', 'div');
+    $this->addViolation($scan, 'label', 'serious', 'input');
+    \Drupal::service('accessguard.waiver_matcher')
+      ->createWaiver((int) $node->id(), 'label', 'input', 'accepted_risk', 'legacy form', 1);
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $s = \Drupal::service('accessguard.violation_analytics')->summary();
+
+    $this->assertSame(2, $s['open']);
+    $this->assertSame(1, $s['waived'] ?? 0);
+    $this->assertSame(1, $s['critical']);
+    $this->assertSame(1, $s['unknown'] ?? 0);
+    $this->assertSame(
+      $s['open'],
+      $s['critical'] + $s['serious'] + $s['moderate'] + $s['minor'] + ($s['unknown'] ?? 0),
+      'The open total equals the sum of all severity buckets.',
+    );
+  }
+
+  /**
+   * Tests by-author buckets non-standard impacts instead of dropping them.
+   */
+  public function testByAuthorBucketsUnknownImpacts(): void {
+    $author = $this->createUser(['access content']);
+    $node = Node::create(['type' => 'page', 'title' => 'A', 'status' => 1]);
+    $node->save();
+    $scan = $this->makeScan((int) $node->id(), (int) $author->id());
+    $this->addViolation($scan, 'custom-rule', 'unknown', 'div');
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $rows = \Drupal::service('accessguard.violation_analytics')->byAuthor();
+
+    $this->assertCount(1, $rows);
+    $this->assertSame(1, $rows[0]['unknown'] ?? 0);
+  }
+
+  /**
+   * Tests authorless content yields no by-author row.
+   *
+   * Without this, a meaningless all-zero "Unknown" row renders and the
+   * "no known author" empty state can never appear.
+   */
+  public function testByAuthorSkipsAuthorlessContent(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'A', 'status' => 1]);
+    $node->save();
+    $this->addViolation($this->makeScan((int) $node->id()), 'image-alt', 'critical', 'img');
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $this->assertSame([], \Drupal::service('accessguard.violation_analytics')->byAuthor());
+  }
+
+  /**
+   * Tests the access-filtered context is not reused across account switches.
+   *
+   * The service memoizes its traversal per request; a second account in the
+   * same process (account switching in cron/queue runs) must not be served
+   * the first account's access-filtered data.
+   */
+  public function testAccessFilteringFollowsAccountSwitches(): void {
+    $secret = Node::create(['type' => 'page', 'title' => 'secret', 'status' => 0]);
+    $secret->save();
+    $open = Node::create(['type' => 'page', 'title' => 'open', 'status' => 1]);
+    $open->save();
+    $this->addViolation($this->makeScan((int) $secret->id()), 'image-alt', 'critical', 'img');
+    $this->addViolation($this->makeScan((int) $open->id()), 'label', 'serious', 'input');
+    $analytics = \Drupal::service('accessguard.violation_analytics');
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $limited = array_column($analytics->byRule(), 'rule_id');
+    $this->assertNotContains('image-alt', $limited);
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content', 'bypass node access']));
+    $admin = array_column($analytics->byRule(), 'rule_id');
+    $this->assertContains('image-alt', $admin, 'A more privileged account sees its own access-filtered data.');
+  }
+
+  /**
    * Tests by-author counts open violations by severity per content author.
    */
   public function testByAuthorCountsOpenSeverities(): void {

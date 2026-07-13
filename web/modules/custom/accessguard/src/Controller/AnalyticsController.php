@@ -72,6 +72,7 @@ class AnalyticsController extends ControllerBase {
         $a['serious'],
         $a['moderate'],
         $a['minor'],
+        $a['unknown'],
         $a['waived'],
       ];
     }
@@ -86,6 +87,7 @@ class AnalyticsController extends ControllerBase {
           $this->t('Serious'),
           $this->t('Moderate'),
           $this->t('Minor'),
+          $this->t('Unknown'),
           $this->t('Waived'),
         ],
         '#rows' => $rows,

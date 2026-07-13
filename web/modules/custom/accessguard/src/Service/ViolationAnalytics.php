@@ -17,11 +17,15 @@ use Drupal\Core\Session\AccountProxyInterface;
 class ViolationAnalytics {
 
   /**
-   * Memoized per-node context, built on first call to accessibleScans().
+   * Memoized per-node context, built once per accessing user.
    *
-   * @var array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, needs_review:array, waived:array<string,string>, waiver_reasons:array<string,string>}>|null
+   * Keyed by the current user's uid: the context is node-access filtered, so
+   * a cached copy must never be served to a different account (account
+   * switching in cron/queue runs would otherwise leak or hide nodes).
+   *
+   * @var array<int, array<int, array{nid:int, created:int, url:string, author_uid:?int, violations:array, needs_review:array, waived:array<string,string>, waiver_reasons:array<string,string>}>>
    */
-  protected ?array $scanContextCache = NULL;
+  protected array $scanContextCache = [];
 
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
@@ -75,7 +79,10 @@ class ViolationAnalytics {
   /**
    * Latest-scan open violations grouped by content author.
    *
-   * @return array<int, array{uid:?int, name:string, pages:int, critical:int, serious:int, moderate:int, minor:int, waived:int}>
+   * Content without a known author is skipped — the "no known author" empty
+   * state covers that case.
+   *
+   * @return array<int, array{uid:int, name:string, pages:int, critical:int, serious:int, moderate:int, minor:int, unknown:int, waived:int}>
    *   Sorted by total open descending.
    */
   public function byAuthor(): array {
@@ -83,32 +90,31 @@ class ViolationAnalytics {
     $authors = [];
     foreach ($this->accessibleScans() as $ctx) {
       $uid = $ctx['author_uid'];
-      $key = $uid ?? 0;
-      if (!isset($authors[$key])) {
-        $name = 'Unknown';
-        if ($uid && ($u = $userStorage->load($uid))) {
-          $name = $u->getDisplayName();
-        }
-        $authors[$key] = [
-          'uid' => $uid,
-          'name' => $name,
-          'pages' => 0,
-        ] + Severity::zeroCounts() + ['waived' => 0];
+      // Authorless content is skipped: this view is explicitly "by author",
+      // and an all-zero catch-all row would only bury the real rows (and
+      // defeat the "no known author" empty state).
+      if ($uid === NULL) {
+        continue;
       }
-      $authors[$key]['pages']++;
+      if (!isset($authors[$uid])) {
+        $u = $userStorage->load($uid);
+        $authors[$uid] = [
+          'uid' => $uid,
+          'name' => $u ? $u->getDisplayName() : 'Unknown',
+          'pages' => 0,
+        ] + Severity::zeroCounts() + [Severity::UNKNOWN => 0, 'waived' => 0];
+      }
+      $authors[$uid]['pages']++;
       foreach ($ctx['violations'] as $v) {
         $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
         if (isset($ctx['waived'][$fp])) {
-          $authors[$key]['waived']++;
+          $authors[$uid]['waived']++;
           continue;
         }
-        $impact = (string) $v->get('impact')->value;
-        if (isset($authors[$key][$impact])) {
-          $authors[$key][$impact]++;
-        }
+        $authors[$uid][Severity::normalize((string) $v->get('impact')->value)]++;
       }
     }
-    $total = fn(array $a) => $a['critical'] + $a['serious'] + $a['moderate'] + $a['minor'];
+    $total = fn(array $a) => $a['critical'] + $a['serious'] + $a['moderate'] + $a['minor'] + $a[Severity::UNKNOWN];
     usort($authors, fn($a, $b) => $total($b) <=> $total($a));
     return array_values($authors);
   }
@@ -158,23 +164,24 @@ class ViolationAnalytics {
   /**
    * Open-violation totals across accessible nodes.
    *
-   * @return array{pages:int, open:int, needs_review:int, critical:int, serious:int, moderate:int, minor:int}
+   * @return array{pages:int, open:int, waived:int, needs_review:int, critical:int, serious:int, moderate:int, minor:int, unknown:int}
    *   Totals across accessible nodes.
    */
   public function summary(): array {
-    $out = ['pages' => 0, 'open' => 0, 'needs_review' => 0] + Severity::zeroCounts();
+    $out = ['pages' => 0, 'open' => 0, 'waived' => 0, 'needs_review' => 0]
+      + Severity::zeroCounts() + [Severity::UNKNOWN => 0];
     foreach ($this->accessibleScans() as $ctx) {
       $out['pages']++;
       foreach ($ctx['violations'] as $v) {
         $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
         if (isset($ctx['waived'][$fp])) {
+          $out['waived']++;
           continue;
         }
         $out['open']++;
-        $impact = (string) $v->get('impact')->value;
-        if (isset($out[$impact])) {
-          $out[$impact]++;
-        }
+        // Every open violation lands in exactly one bucket (unknown is the
+        // catch-all), so 'open' always equals the sum of the buckets.
+        $out[Severity::normalize((string) $v->get('impact')->value)]++;
       }
       foreach ($ctx['needs_review'] ?? [] as $v) {
         $fp = WaiverMatcher::fingerprint((string) $v->get('rule_id')->value, (string) $v->get('selector')->value);
@@ -210,7 +217,7 @@ class ViolationAnalytics {
    *   Per-node context for each latest scan the current user may view.
    */
   public function latestScanContexts(): array {
-    return $this->scanContextCache ??= $this->buildScanContext();
+    return $this->scanContextCache[(int) $this->currentUser->id()] ??= $this->buildScanContext();
   }
 
   /**

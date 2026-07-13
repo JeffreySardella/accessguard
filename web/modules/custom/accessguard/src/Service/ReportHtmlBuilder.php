@@ -89,12 +89,17 @@ class ReportHtmlBuilder {
    */
   protected function summarySection(): string {
     $s = $this->analytics->summary();
+    $severities = 'Critical: ' . (int) $s['critical'] . ', Serious: ' . (int) $s['serious']
+      . ', Moderate: ' . (int) $s['moderate'] . ', Minor: ' . (int) $s['minor'];
+    if (($s['unknown'] ?? 0) > 0) {
+      $severities .= ', Unknown severity: ' . (int) $s['unknown'];
+    }
     return '<section><h2>Compliance summary</h2><ul>'
       . '<li>Pages scanned: ' . (int) $s['pages'] . '</li>'
       . '<li>Total open violations: ' . (int) $s['open'] . '</li>'
-      . '<li>Critical: ' . (int) $s['critical'] . ', Serious: ' . (int) $s['serious']
-      . ', Moderate: ' . (int) $s['moderate'] . ', Minor: ' . (int) $s['minor'] . '</li>'
-      . '<li>Needs review (manual check required): ' . (int) ($s['needs_review'] ?? 0) . '</li></ul></section>';
+      . '<li>' . $severities . '</li>'
+      . '<li>Needs review (manual check required): ' . (int) ($s['needs_review'] ?? 0) . '</li>'
+      . '<li>Waived: ' . (int) ($s['waived'] ?? 0) . '</li></ul></section>';
   }
 
   /**
@@ -124,13 +129,13 @@ class ReportHtmlBuilder {
       $rows .= '<tr><td>' . Html::escape($a['name']) . '</td><td>' . (int) $a['pages']
         . '</td><td>' . (int) $a['critical'] . '</td><td>' . (int) $a['serious']
         . '</td><td>' . (int) $a['moderate'] . '</td><td>' . (int) $a['minor']
-        . '</td><td>' . (int) $a['waived'] . '</td></tr>';
+        . '</td><td>' . (int) $a['unknown'] . '</td><td>' . (int) $a['waived'] . '</td></tr>';
     }
     if ($rows === '') {
-      $rows = '<tr><td colspan="7">No scanned content with a known author.</td></tr>';
+      $rows = '<tr><td colspan="8">No scanned content with a known author.</td></tr>';
     }
     return '<section><h2>Violations by author</h2><table><thead><tr>'
-      . '<th scope="col">Author</th><th scope="col">Pages</th><th scope="col">Critical</th><th scope="col">Serious</th><th scope="col">Moderate</th><th scope="col">Minor</th><th scope="col">Waived</th>'
+      . '<th scope="col">Author</th><th scope="col">Pages</th><th scope="col">Critical</th><th scope="col">Serious</th><th scope="col">Moderate</th><th scope="col">Minor</th><th scope="col">Unknown</th><th scope="col">Waived</th>'
       . '</tr></thead><tbody>' . $rows . '</tbody></table></section>';
   }
 

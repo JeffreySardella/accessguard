@@ -78,6 +78,39 @@ class AnalyticsControllerTest extends KernelTestBase {
   }
 
   /**
+   * Tests the by-author table surfaces unknown-severity counts.
+   *
+   * A violation whose impact falls outside the four ranked severities must
+   * appear in an Unknown column rather than silently vanishing from the row.
+   */
+  public function testByAuthorShowsUnknownSeverityColumn(): void {
+    $author = $this->createUser(['access content']);
+    $node = Node::create(['type' => 'page', 'title' => 'A', 'status' => 1]);
+    $node->save();
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'status' => 'complete',
+      'content_author' => $author->id(),
+    ]);
+    $scan->save();
+    \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+      'scan_id' => $scan->id(),
+      'rule_id' => 'custom-rule',
+      'impact' => 'unknown',
+      'selector' => 'div',
+    ])->save();
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $build = AnalyticsController::create($this->container)->byAuthor();
+
+    $headers = array_map('strval', $build['table']['#header']);
+    $unknownIndex = array_search('Unknown', $headers, TRUE);
+    $this->assertNotFalse($unknownIndex, 'The by-author table has an Unknown column.');
+    $this->assertSame(1, $build['table']['#rows'][0][$unknownIndex]);
+  }
+
+  /**
    * Tests the analytics routes require the reports permission.
    */
   public function testRoutesRequireReportsPermission(): void {
