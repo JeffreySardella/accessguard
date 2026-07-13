@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { withBrowserContext } from './browserPool.js';
 
 /**
  * Renders self-contained HTML to a PDF Buffer.
@@ -8,29 +8,15 @@ import puppeteer from 'puppeteer';
  * outbound request except the main frame's about:blank bootstrap and data:
  * URIs — including sub-frame document loads (e.g. an attacker-supplied
  * <iframe src="http://internal/...">), which would otherwise sail through a
- * naive "allow all document requests" check. DNS is additionally pinned to
- * NOTFOUND for every host as a belt-and-suspenders measure.
+ * naive "allow all document requests" check. The shared browser additionally
+ * pins DNS to NOTFOUND for every host (see browserPool.js).
  *
  * @param {string} html
  * @returns {Promise<Buffer>}
  */
 export async function renderPdf(html) {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      // Route Chromium shared memory to /tmp; the container's default 64MB
-      // /dev/shm otherwise crashes the renderer on larger reports.
-      '--disable-dev-shm-usage',
-      // Belt-and-suspenders: the report needs zero network, so make DNS fail
-      // for every host. With the request interception below, this closes the
-      // SSRF surface even if a request were to slip past interception.
-      '--host-resolver-rules=MAP * ~NOTFOUND',
-    ],
-  });
-  try {
-    const page = await browser.newPage();
+  return withBrowserContext(async (context) => {
+    const page = await context.newPage();
     // The report is static HTML + inline CSS; no scripts should ever run.
     await page.setJavaScriptEnabled(false);
     await page.setRequestInterception(true);
@@ -45,7 +31,7 @@ export async function renderPdf(html) {
         req.isNavigationRequest() &&
         req.url() === 'about:blank';
       if (isMainBootstrap || req.url().startsWith('data:')) {
-        // Guarded like the abort path below: if the browser is torn down while
+        // Guarded like the abort path below: if the context is torn down while
         // this event is in flight, continue() rejects, and an unhandled
         // rejection would kill the whole process.
         req.continue().catch(() => {});
@@ -63,7 +49,5 @@ export async function renderPdf(html) {
       timeout: 60000,
     });
     return Buffer.from(pdf);
-  } finally {
-    await browser.close();
-  }
+  });
 }

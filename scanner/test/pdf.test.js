@@ -1,5 +1,10 @@
 import { app } from '../src/server.js';
 import http from 'node:http';
+import { closeSharedBrowser } from '../src/browserPool.js';
+
+afterAll(async () => {
+  await closeSharedBrowser();
+});
 
 function listen() {
   const server = http.createServer(app).listen(0);
