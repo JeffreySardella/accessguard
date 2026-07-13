@@ -332,7 +332,18 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: `withBrowserContext(fn)`, `closeSharedBrowser()` from Task 1.
 - Produces: `runScan(url)` signature and result shape unchanged.
 
-- [ ] **Step 1: Write the failing WebSocket-escape test**
+> **Amendment (2026-07-13):** the WebSocket test cannot go RED→GREEN in this
+> harness — a `file://` scan tears the browser down before the WS handshake
+> completes, so the assertion also holds under the pre-change per-request
+> browser (for a timing reason, not the DNS rule). Kept as a **security
+> invariant / forward regression guard**, with an honest comment. The DNS
+> posture was verified out of band: with a 2 s window a plain browser lets
+> `ws://localhost` connect (`touched=true`); adding `--host-resolver-rules=MAP
+> * ~NOTFOUND` makes it fail with `ERR_NAME_NOT_RESOLVED` (`touched=false`).
+> The canary uses a dual-stack `listen(0)` (no host) so it hears both `::1`
+> and `127.0.0.1` — Windows resolves `localhost` IPv6-first.
+
+- [ ] **Step 1: Write the WebSocket-escape invariant test**
 
 In `scanner/test/scan.test.js`, after the imports add:
 
@@ -356,7 +367,10 @@ test('a scanned page cannot open a hostname-based WebSocket to the network', asy
   let touched = false;
   const canary = http.createServer(() => {});
   canary.on('connection', () => { touched = true; });
-  await new Promise((resolve) => canary.listen(0, '127.0.0.1', resolve));
+  // Dual-stack listen (no host): on Windows `localhost` resolves IPv6-first,
+  // so an IPv4-only canary would miss the connection and the test would pass
+  // for the wrong reason even without the DNS posture.
+  await new Promise((resolve) => canary.listen(0, resolve));
   const port = canary.address().port;
 
   const wsFixture = path.join(os.tmpdir(), `accessguard-ws-${Date.now()}.html`);
