@@ -56,15 +56,20 @@ function ensureBrowser() {
 
 async function acquireContext() {
   const attempt = ensureBrowser();
+  let browser = null;
   try {
-    const browser = await attempt;
+    browser = await attempt;
     return await browser.createBrowserContext();
-  } catch {
+  } catch (e) {
+    // A transient failure on a still-connected browser must propagate:
+    // replacing a live browser here would orphan it (a leaked second
+    // Chromium that nothing ever closes).
+    if (browser?.connected) throw e;
     // The browser died between requests (or launch failed). Forget it and
     // retry exactly once on a fresh browser; a second failure propagates.
     if (browserPromise === attempt) browserPromise = null;
-    const browser = await ensureBrowser();
-    return browser.createBrowserContext();
+    const fresh = await ensureBrowser();
+    return fresh.createBrowserContext();
   }
 }
 

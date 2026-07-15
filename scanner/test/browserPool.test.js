@@ -30,6 +30,25 @@ test('a crashed browser is replaced on the next request', async () => {
   expect(pid).not.toBe(proc.pid);
 }, 30000);
 
+test('a transient context failure on a live browser propagates instead of launching a second browser', async () => {
+  const browser = await withBrowserContext(async (ctx) => ctx.browser());
+  const original = browser.createBrowserContext;
+  browser.createBrowserContext = async () => {
+    throw new Error('transient context failure');
+  };
+  try {
+    await expect(withBrowserContext(async () => {})).rejects.toThrow('transient context failure');
+  } finally {
+    browser.createBrowserContext = original;
+  }
+  // The live browser must still be the pool's browser — not orphaned
+  // behind a freshly launched replacement.
+  const pid = await withBrowserContext(async (ctx) => ctx.browser().process().pid);
+  const originalPid = browser.process().pid;
+  if (browser.connected && pid !== originalPid) await browser.close();
+  expect(pid).toBe(originalPid);
+}, 30000);
+
 test('the browser closes after the idle timeout and relaunches on demand', async () => {
   process.env.SCANNER_BROWSER_IDLE_MS = '100';
   const pid1 = await withBrowserContext(async (ctx) => ctx.browser().process().pid);
