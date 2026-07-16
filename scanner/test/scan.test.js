@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { runScan } from '../src/scan.js';
 import path from 'node:path';
 import os from 'node:os';
@@ -57,6 +58,30 @@ test('scans an http target end-to-end, fetching subresources through the pinned 
   } finally {
     delete process.env.SCANNER_ALLOW_PRIVATE;
     server.close();
+  }
+}, 30000);
+
+test('a failed navigation fetch logs its underlying cause', async () => {
+  // A fulfillment failure reaches Chromium only as ERR_BLOCKED_BY_CLIENT,
+  // which hides the real error (TLS verification, connection refused, guard
+  // rejection). Subresource failures abort quietly by design, but when the
+  // top-level navigation fails the whole scan dies — the underlying cause
+  // must land in the scanner log or the failure is undiagnosable.
+  const server = http.createServer(() => {});
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+
+  const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+  process.env.SCANNER_ALLOW_PRIVATE = '1';
+  try {
+    await expect(runScan(`http://127.0.0.1:${port}/`)).rejects.toThrow();
+    const logged = errors.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logged).toContain('ECONNREFUSED');
+    expect(logged).toContain(`http://127.0.0.1:${port}/`);
+  } finally {
+    delete process.env.SCANNER_ALLOW_PRIVATE;
+    errors.mockRestore();
   }
 }, 30000);
 

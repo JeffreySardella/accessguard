@@ -21,6 +21,12 @@ const LAUNCH_ARGS = [
   // non-trivial pages and the renderer crashes. Route shared memory to /tmp.
   '--disable-dev-shm-usage',
   '--host-resolver-rules=MAP * ~NOTFOUND',
+  // Scan the URL as given. Chromium otherwise silently upgrades hostname
+  // http:// navigations to https:// (HTTPS-First); the upgraded request is
+  // fulfilled Node-side against the target's TLS endpoint, so an http-only
+  // or dev-cert site fails (ERR_BLOCKED_BY_CLIENT) instead of being scanned,
+  // and the abort suppresses Chromium's own fallback to http.
+  '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable',
 ];
 
 let browserPromise = null;
@@ -38,7 +44,11 @@ function idleMs() {
 
 function ensureBrowser() {
   if (!browserPromise) {
-    const p = puppeteer.launch({ headless: true, args: LAUNCH_ARGS }).then((browser) => {
+    // Copy the args: puppeteer.launch() mutates the array it's given (it
+    // folds --disable-features into its default flag and REMOVES the entry),
+    // so passing LAUNCH_ARGS itself would strip that flag from every
+    // relaunch after the first.
+    const p = puppeteer.launch({ headless: true, args: [...LAUNCH_ARGS] }).then((browser) => {
       browser.on('disconnected', () => {
         // Only forget OUR promise: a newer browser may already be launching.
         if (browserPromise === p) browserPromise = null;

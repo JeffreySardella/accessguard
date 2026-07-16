@@ -97,7 +97,14 @@ export async function runScan(url) {
         });
         totalResponseBytes += res.body ? res.body.length : 0;
         await req.respond({ status: res.status, headers: res.headers, body: res.body });
-      } catch {
+      } catch (err) {
+        // Subresource failures abort quietly (the page still scans), but a
+        // failed top-level navigation kills the whole scan and reaches the
+        // caller only as ERR_BLOCKED_BY_CLIENT — log the real cause (TLS
+        // failure, connection refused, guard rejection) or it's gone.
+        if (req.isNavigationRequest()) {
+          console.error('[accessguard-scanner] navigation fetch failed:', reqUrl, err && err.message ? err.message : err);
+        }
         await req.abort('blockedbyclient').catch(() => {});
       }
     });
