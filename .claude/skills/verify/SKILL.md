@@ -24,7 +24,7 @@ curl -X POST http://127.0.0.1:3000/pdf -H 'content-type: application/json' \
   `ddev drush cset accessguard.settings scanner_endpoint 'http://host.docker.internal:3000' -y`
   — and RESTORE the original value afterwards.
 - After changing any service constructor or services.yml: `ddev drush cr`, or routes 500 with "controller not callable".
-- `accessguard.settings:scan_base_url` must be `http://accessguard.ddev.site` on this site. Without it, scan URLs inherit the origin of whichever request triggered cron (e.g. `http://127.0.0.1:<port>`), which the scanner container cannot reach — queue scans then fail with `scan_failed`/`ERR_BLOCKED_BY_CLIENT`.
+- `accessguard.settings:scan_base_url` must be `https://accessguard.ddev.site` on this site. Without it, scan URLs inherit the origin of whichever request triggered cron (e.g. `http://127.0.0.1:<port>`), which the scanner container cannot reach — queue scans then fail with `scan_failed`/`ERR_BLOCKED_BY_CLIENT`. https works because the scanner service mounts ddev's mkcert root CA (`NODE_EXTRA_CA_CERTS` in `.ddev/docker-compose.scanner.yaml`).
 - After changing scanner code, the DDEV scanner container keeps running the old image: rebuild with `docker compose -f .ddev/.ddev-docker-compose-full.yaml -p ddev-accessguard build accessguard-scanner` then `ddev restart` (verify with `docker logs`).
 - Logs: `ddev drush watchdog:show --count=5 --severity=Error --format=yaml`.
 

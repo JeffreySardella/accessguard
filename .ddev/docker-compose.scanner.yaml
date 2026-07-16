@@ -33,8 +33,21 @@ services:
       # blocks internal hosts) AND set SCANNER_AUTH_TOKEN to a secret, with a
       # matching ACCESSGUARD_SCANNER_TOKEN on the Drupal side.
       - SCANNER_ALLOW_PRIVATE=1
+      # Trust ddev's mkcert root CA so https:// scan targets on this site
+      # (e.g. scan_base_url=https://<project>.ddev.site) pass Node-side TLS
+      # verification in fetchPinned(). Chromium needs no trust store here —
+      # every request is fulfilled Node-side. If the file is absent Node
+      # logs a warning and continues; http scanning is unaffected.
+      - NODE_EXTRA_CA_CERTS=/mnt/ddev-global-cache/mkcert/rootCA.pem
+    volumes:
+      - ddev-global-cache:/mnt/ddev-global-cache:ro
     labels:
       com.ddev.site-name: ${DDEV_SITENAME}
       com.ddev.approot: ${DDEV_APPROOT}
     networks:
       - default
+
+volumes:
+  ddev-global-cache:
+    name: ddev-global-cache
+    external: true
