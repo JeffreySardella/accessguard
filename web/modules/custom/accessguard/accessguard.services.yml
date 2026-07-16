@@ -28,3 +28,6 @@ services:
   accessguard.report_html_builder:
     class: Drupal\accessguard\Service\ReportHtmlBuilder
     arguments: ['@accessguard.violation_analytics', '@entity_type.manager', '@current_user', '@date.formatter', '@config.factory', '@datetime.time']
+  accessguard.gate_evaluator:
+    class: Drupal\accessguard\Service\GateEvaluator
+    arguments: ['@entity_type.manager', '@config.factory', '@accessguard.waiver_matcher', '@accessguard.scan_repository']

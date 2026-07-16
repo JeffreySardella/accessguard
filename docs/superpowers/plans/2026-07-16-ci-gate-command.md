@@ -241,7 +241,11 @@ class GateEvaluator {
       if (!$includeNeedsReview && $v->get('result_type')->value === 'needs_review') {
         continue;
       }
-      if (Severity::rank($v->get('impact')->value) < $threshold) {
+      // Normalize before ranking: ScanRecorder stores normalized impacts,
+      // but rows predating that (or written by hand) may carry raw values,
+      // and an unrecognized impact must rank as UNKNOWN (gateable), not 0
+      // (invisible to every gate).
+      if (Severity::rank(Severity::normalize($v->get('impact')->value)) < $threshold) {
         continue;
       }
       $fp = WaiverMatcher::fingerprint(
