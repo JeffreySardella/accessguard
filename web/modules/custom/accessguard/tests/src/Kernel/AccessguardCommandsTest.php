@@ -36,6 +36,7 @@ class AccessguardCommandsTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('accessguard_scan');
     $this->installEntitySchema('accessguard_violation');
+    $this->installEntitySchema('accessguard_waiver');
     $this->installEntitySchema('node');
     $this->installEntitySchema('user');
     $this->installSchema('node', ['node_access']);
@@ -99,6 +100,96 @@ class AccessguardCommandsTest extends KernelTestBase {
   public function testNowPathRejectsMissingNode(): void {
     $this->expectException(\InvalidArgumentException::class);
     $this->createCommand()->scan(999, ['now' => TRUE]);
+  }
+
+  /**
+   * Creates a published node with a completed scan carrying violations.
+   *
+   * @return int
+   *   The node id.
+   */
+  private function makeScannedNode(string $title, array $impacts, bool $published = TRUE): int {
+    $node = Node::create(['type' => 'page', 'title' => $title, 'status' => $published ? 1 : 0]);
+    $node->save();
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'status' => 'complete',
+    ]);
+    $scan->save();
+    foreach ($impacts as $i => $impact) {
+      \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+        'scan_id' => $scan->id(),
+        'rule_id' => 'image-alt',
+        'impact' => $impact,
+        'selector' => 'img.v' . $i,
+      ])->save();
+    }
+    return (int) $node->id();
+  }
+
+  /**
+   * Tests the gate fails (exit 1) when a published node has a blocker.
+   */
+  public function testGateFailsOnBlockingViolation(): void {
+    $clean = $this->makeScannedNode('clean', []);
+    $dirty = $this->makeScannedNode('dirty', ['critical']);
+
+    $result = $this->createCommand()->gate();
+
+    $this->assertSame(1, $result->getExitCode());
+    $rows = $result->getOutputData()->getArrayCopy();
+    $byNid = array_column($rows, NULL, 'nid');
+    $this->assertSame(0, $byNid[$clean]['blocking']);
+    $this->assertSame(1, $byNid[$dirty]['blocking']);
+  }
+
+  /**
+   * Tests waived violations pass the gate (exit 0).
+   */
+  public function testGatePassesWhenViolationWaived(): void {
+    $nid = $this->makeScannedNode('waived', ['critical']);
+    \Drupal::service('accessguard.waiver_matcher')
+      ->createWaiver($nid, 'image-alt', 'img.v0', 'false_positive', 'decorative', 1);
+
+    $result = $this->createCommand()->gate();
+
+    $this->assertSame(0, $result->getExitCode());
+  }
+
+  /**
+   * Tests unpublished nodes are excluded from the all-nodes evaluation.
+   */
+  public function testGateIgnoresUnpublishedNodes(): void {
+    $this->makeScannedNode('draft', ['critical'], FALSE);
+
+    $result = $this->createCommand()->gate();
+
+    $this->assertSame(0, $result->getExitCode());
+    $this->assertCount(0, $result->getOutputData()->getArrayCopy());
+  }
+
+  /**
+   * Tests a single-nid evaluation gates that node only, published or not.
+   */
+  public function testGateSingleNode(): void {
+    $this->makeScannedNode('other-dirty', ['critical']);
+    $draft = $this->makeScannedNode('draft-dirty', ['critical'], FALSE);
+
+    $result = $this->createCommand()->gate($draft);
+
+    $this->assertSame(1, $result->getExitCode());
+    $rows = $result->getOutputData()->getArrayCopy();
+    $this->assertCount(1, $rows);
+    $this->assertSame($draft, $rows[0]['nid']);
+  }
+
+  /**
+   * Tests a single-nid evaluation of an unknown node fails loudly.
+   */
+  public function testGateRejectsMissingNode(): void {
+    $this->expectException(\InvalidArgumentException::class);
+    $this->createCommand()->gate(999);
   }
 
 }

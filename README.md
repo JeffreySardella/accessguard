@@ -94,11 +94,12 @@ You should see all six demo pages, each with the accessibility violation it was 
 
 ## What's built
 
-- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard, plus a PDF-rendering endpoint for audit reports, with a concurrency-capped shared-browser pool (per-request isolated contexts, crash recovery, idle teardown via `SCANNER_BROWSER_IDLE_MS`). 49 tests.
+- **Node scanner** (`scanner/`) — axe-core in headless Chromium behind an HTTP endpoint, with an SSRF guard, plus a PDF-rendering endpoint for audit reports, with a concurrency-capped shared-browser pool (per-request isolated contexts, crash recovery, idle teardown via `SCANNER_BROWSER_IDLE_MS`). 52 tests.
 - **`accessguard` module**
   - `accessguard_scan` and `accessguard_violation` entities
   - `ScanRunner` (calls the scanner), `ScanRecorder` (persists results), and `RegressionService` (diffs a node's two latest scans) services
   - a queue worker and a `drush accessguard:scan` command
+  - a **CI gate**: `drush accessguard:gate` evaluates the publish-gate policy (threshold, waivers, needs-review setting) against every published node that has a scan and exits non-zero if anything blocks — wire it into CI to fail a build on accessibility regressions. Pass a node id to check one node; use `--format=json` for machine-readable output. Runs even when the interactive gate is disabled.
   - **cron site-wide re-scanning** of stale/unscanned published nodes
   - a **compliance dashboard** at `/admin/reports/accessguard`, plus per-node detail pages with scan history, regression diff (new / fixed / persisting), and author attribution
   - **publish-gating**: an entity validation constraint that blocks publishing a node whose latest scan has violations at/above a configured severity threshold (bypassable with a permission)
