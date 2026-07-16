@@ -2,12 +2,11 @@
 
 namespace Drupal\accessguard\Plugin\Validation\Constraint;
 
+use Drupal\accessguard\Service\GateEvaluator;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
-use Drupal\accessguard\Service\WaiverMatcher;
-use Drupal\accessguard\Severity;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
@@ -21,7 +20,7 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
     protected EntityTypeManagerInterface $entityTypeManager,
     protected ConfigFactoryInterface $configFactory,
     protected AccountProxyInterface $currentUser,
-    protected WaiverMatcher $waiverMatcher,
+    protected GateEvaluator $gateEvaluator,
   ) {}
 
   /**
@@ -32,7 +31,7 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       $container->get('entity_type.manager'),
       $container->get('config.factory'),
       $container->get('current_user'),
-      $container->get('accessguard.waiver_matcher'),
+      $container->get('accessguard.gate_evaluator'),
     );
   }
 
@@ -60,58 +59,14 @@ class AccessguardGateConstraintValidator extends ConstraintValidator implements 
       return;
     }
 
-    // The impact taxonomy and its rank order live in Severity (single source
-    // of truth); a null/unknown impact ranks alongside moderate so it stays
-    // gateable rather than invisibly passing every gate.
-    $thresholdName = $config->get('gate_threshold') ?: 'critical';
-    $threshold = Severity::rank($thresholdName) ?: 4;
-
-    $scanStorage = $this->entityTypeManager->getStorage('accessguard_scan');
-    $ids = $scanStorage->getQuery()
-      ->accessCheck(FALSE)
-      ->condition('target_entity_type', 'node')
-      ->condition('target_entity_id', $entity->id())
-      ->sort('created', 'DESC')
-      ->sort('id', 'DESC')
-      ->range(0, 1)
-      ->execute();
-    if (!$ids) {
-      // Never scanned: nothing to gate on.
-      return;
-    }
-    $scanId = reset($ids);
-
-    // "Needs review" (axe incomplete) findings are uncertain by definition, so
-    // by default they don't block publishing — only surface for human review.
-    // Strict sites can opt in via gate_includes_needs_review.
-    $includeNeedsReview = (bool) $config->get('gate_includes_needs_review');
-
-    $waived = $this->waiverMatcher->waivedFingerprints((int) $entity->id());
-    $violationStorage = $this->entityTypeManager->getStorage('accessguard_violation');
-    $violations = $violationStorage->loadByProperties(['scan_id' => $scanId]);
-
-    $blocking = 0;
-    foreach ($violations as $v) {
-      if (!$includeNeedsReview && $v->get('result_type')->value === 'needs_review') {
-        continue;
-      }
-      $impact = $v->get('impact')->value;
-      if (Severity::rank($impact) < $threshold) {
-        continue;
-      }
-      $fp = WaiverMatcher::fingerprint(
-        $v->get('rule_id')->value,
-        (string) $v->get('selector')->value
-      );
-      if (!isset($waived[$fp])) {
-        $blocking++;
-      }
-    }
-
-    if ($blocking > 0) {
+    // The counting policy (threshold ranks, waivers, needs-review handling)
+    // lives in GateEvaluator, shared with the accessguard:gate CI command.
+    // NULL means never scanned: nothing to gate on.
+    $blocking = $this->gateEvaluator->blockingCount((int) $entity->id());
+    if ($blocking !== NULL && $blocking > 0) {
       $this->context->addViolation($constraint->message, [
         '@count' => $blocking,
-        '@threshold' => $thresholdName,
+        '@threshold' => $config->get('gate_threshold') ?: 'critical',
       ]);
     }
   }
