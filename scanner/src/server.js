@@ -149,7 +149,13 @@ if (process.env.NODE_ENV !== 'test') {
   process.on('unhandledRejection', (reason) => {
     console.error('[accessguard-scanner] unhandled rejection:', reason);
   });
-  const server = app.listen(PORT, () => console.log(`accessguard-scanner listening on ${PORT}`));
+  // Express 5 reports listen errors (e.g. EADDRINUSE) via the callback
+  // instead of an 'error' event; rethrow so a failed bind kills the process
+  // loudly rather than leaving a healthy-looking service that isn't listening.
+  const server = app.listen(PORT, (err) => {
+    if (err) throw err;
+    console.log(`accessguard-scanner listening on ${PORT}`);
+  });
   // Graceful shutdown: stop accepting new connections and let in-flight scans
   // finish, rather than cutting them off (and orphaning a Chromium) when the
   // orchestrator sends SIGTERM. A short hard-exit timer bounds the wait.
