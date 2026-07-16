@@ -47,6 +47,18 @@ class WaiverTest extends KernelTestBase {
   }
 
   /**
+   * Tests a waiver cannot be created with an empty reason.
+   *
+   * The UI marks the reason required, but programmatic callers could pass an
+   * empty string and produce a waiver with no audit trail.
+   */
+  public function testEmptyReasonIsRejected(): void {
+    $matcher = \Drupal::service('accessguard.waiver_matcher');
+    $this->expectException(\InvalidArgumentException::class);
+    $matcher->createWaiver(7, 'image-alt', 'img', 'false_positive', '  ', 1);
+  }
+
+  /**
    * Tests that the fingerprint encoding cannot collide across pairs.
    *
    * A selector may itself contain the "|" character (e.g. attribute selectors

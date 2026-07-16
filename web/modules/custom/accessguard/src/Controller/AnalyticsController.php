@@ -66,7 +66,7 @@ class AnalyticsController extends ControllerBase {
     $rows = [];
     foreach ($this->analytics->byAuthor() as $a) {
       $rows[] = [
-        $a['name'],
+        $a['name'] ?? $this->t('Unknown'),
         $a['pages'],
         $a['critical'],
         $a['serious'],

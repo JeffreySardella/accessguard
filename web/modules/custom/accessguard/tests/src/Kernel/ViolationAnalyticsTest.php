@@ -176,6 +176,31 @@ class ViolationAnalyticsTest extends KernelTestBase {
   }
 
   /**
+   * Tests a deleted author yields a NULL name for the consumer to label.
+   *
+   * The service must not bake in an untranslated 'Unknown' literal: the UI
+   * consumer translates the fallback, the PDF builder uses its own English
+   * label (the report is lang="en").
+   */
+  public function testByAuthorNameIsNullForDeletedUser(): void {
+    // User::delete() purges the account's users_data rows.
+    $this->installSchema('user', ['users_data']);
+    $author = $this->createUser(['access content']);
+    $uid = (int) $author->id();
+    $node = Node::create(['type' => 'page', 'title' => 'A', 'status' => 1]);
+    $node->save();
+    $this->addViolation($this->makeScan((int) $node->id(), $uid), 'image-alt', 'critical', 'img');
+    $author->delete();
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $rows = \Drupal::service('accessguard.violation_analytics')->byAuthor();
+
+    $this->assertCount(1, $rows);
+    $this->assertSame($uid, $rows[0]['uid']);
+    $this->assertNull($rows[0]['name']);
+  }
+
+  /**
    * Tests authorless content yields no by-author row.
    *
    * Without this, a meaningless all-zero "Unknown" row renders and the

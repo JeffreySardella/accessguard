@@ -18,7 +18,6 @@ use Drupal\Core\Link;
 use Drupal\Core\Url;
 use Drupal\node\NodeInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -244,7 +243,7 @@ class DashboardController extends ControllerBase {
       $this->messenger()->addError($e instanceof ReportTooLargeException
         ? $this->t('The audit report is too large to render as a PDF. Use the CSV export instead.')
         : $this->t('PDF export failed — the scanner service may be down or misconfigured (details are in the site log). CSV export is still available.'));
-      return new RedirectResponse(Url::fromRoute('accessguard.dashboard')->toString());
+      return $this->redirect('accessguard.dashboard');
     }
     $response = new Response($pdf);
     $response->headers->set('Content-Type', 'application/pdf');

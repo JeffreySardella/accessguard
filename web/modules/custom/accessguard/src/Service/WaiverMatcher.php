@@ -78,6 +78,11 @@ class WaiverMatcher {
    * repeated submissions cannot pile up duplicate waivers.
    */
   public function createWaiver(int $nid, string $ruleId, string $selector, string $status, string $reason, ?int $reviewerUid): void {
+    // The waive form marks the reason required; enforce the same here so
+    // programmatic callers can't record a waiver with no audit trail.
+    if (trim($reason) === '') {
+      throw new \InvalidArgumentException('A waiver requires a non-empty reason.');
+    }
     // Serialize the check-then-insert per (node, fingerprint) so two
     // concurrent submissions of the same waiver can't both pass the
     // existence check and each insert a duplicate.

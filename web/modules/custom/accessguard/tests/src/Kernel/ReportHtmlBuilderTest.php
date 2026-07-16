@@ -122,9 +122,46 @@ class ReportHtmlBuilderTest extends KernelTestBase {
     $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
     $html = \Drupal::service('accessguard.report_html_builder')->build();
 
-    $this->assertStringContainsString('Total open violations: 1', $html);
+    $this->assertStringContainsString('Open violations (latest scans): 1', $html);
     $this->assertStringContainsString('Waived: 1', $html);
     $this->assertStringContainsString('Unknown severity: 1', $html);
+  }
+
+  /**
+   * Tests findings exclude nodes the current user cannot view.
+   *
+   * The findings section iterates the shared analytics context, which is
+   * node-access filtered; this pins that behavior so a refactor to a
+   * non-filtered data source cannot silently leak restricted content.
+   */
+  public function testFindingsExcludeInaccessibleNodes(): void {
+    $public = Node::create(['type' => 'page', 'title' => 'Public page', 'status' => 1]);
+    $public->save();
+    $secret = Node::create(['type' => 'page', 'title' => 'Secret page', 'status' => 0]);
+    $secret->save();
+    $scanStorage = \Drupal::entityTypeManager()->getStorage('accessguard_scan');
+    foreach ([$public, $secret] as $node) {
+      $scan = $scanStorage->create([
+        'target_entity_type' => 'node',
+        'target_entity_id' => $node->id(),
+        'status' => 'complete',
+      ]);
+      $scan->save();
+      \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+        'scan_id' => $scan->id(),
+        'rule_id' => 'image-alt',
+        'impact' => 'critical',
+        'selector' => 'img',
+      ])->save();
+    }
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $html = \Drupal::service('accessguard.report_html_builder')->build();
+
+    $this->assertStringContainsString('Public page', $html);
+    $this->assertStringNotContainsString('Secret page', $html);
+    // The inaccessible node's scan must not inflate the summary either.
+    $this->assertStringContainsString('Pages scanned: 1', $html);
   }
 
   /**

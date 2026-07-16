@@ -82,8 +82,9 @@ class ViolationAnalytics {
    * Content without a known author is skipped — the "no known author" empty
    * state covers that case.
    *
-   * @return array<int, array{uid:int, name:string, pages:int, critical:int, serious:int, moderate:int, minor:int, unknown:int, waived:int}>
-   *   Sorted by total open descending.
+   * @return array<int, array{uid:int, name:?string, pages:int, critical:int, serious:int, moderate:int, minor:int, unknown:int, waived:int}>
+   *   Sorted by total open descending. A NULL name means the author account
+   *   no longer exists; consumers supply their own (translated) fallback.
    */
   public function byAuthor(): array {
     $userStorage = $this->entityTypeManager->getStorage('user');
@@ -100,7 +101,7 @@ class ViolationAnalytics {
         $u = $userStorage->load($uid);
         $authors[$uid] = [
           'uid' => $uid,
-          'name' => $u ? $u->getDisplayName() : 'Unknown',
+          'name' => $u ? $u->getDisplayName() : NULL,
           'pages' => 0,
         ] + Severity::zeroCounts() + [Severity::UNKNOWN => 0, 'waived' => 0];
       }

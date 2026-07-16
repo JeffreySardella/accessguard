@@ -96,7 +96,7 @@ class ReportHtmlBuilder {
     }
     return '<section><h2>Compliance summary</h2><ul>'
       . '<li>Pages scanned: ' . (int) $s['pages'] . '</li>'
-      . '<li>Total open violations: ' . (int) $s['open'] . '</li>'
+      . '<li>Open violations (latest scans): ' . (int) $s['open'] . '</li>'
       . '<li>' . $severities . '</li>'
       . '<li>Needs review (manual check required): ' . (int) ($s['needs_review'] ?? 0) . '</li>'
       . '<li>Waived: ' . (int) ($s['waived'] ?? 0) . '</li></ul></section>';
@@ -126,7 +126,7 @@ class ReportHtmlBuilder {
   protected function byAuthorSection(): string {
     $rows = '';
     foreach ($this->analytics->byAuthor() as $a) {
-      $rows .= '<tr><td>' . Html::escape($a['name']) . '</td><td>' . (int) $a['pages']
+      $rows .= '<tr><td>' . Html::escape($a['name'] ?? 'Unknown') . '</td><td>' . (int) $a['pages']
         . '</td><td>' . (int) $a['critical'] . '</td><td>' . (int) $a['serious']
         . '</td><td>' . (int) $a['moderate'] . '</td><td>' . (int) $a['minor']
         . '</td><td>' . (int) $a['unknown'] . '</td><td>' . (int) $a['waived'] . '</td></tr>';

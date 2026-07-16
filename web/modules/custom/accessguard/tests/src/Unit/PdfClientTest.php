@@ -41,6 +41,26 @@ class PdfClientTest extends UnitTestCase {
   }
 
   /**
+   * Tests no auth header is sent when no token is configured.
+   *
+   * Mirrors ScanRunnerTest: an empty X-Scanner-Token header would read as a
+   * (failed) auth attempt on a token-protected scanner instead of the
+   * intended "no auth configured" posture.
+   */
+  public function testNoTokenHeaderWhenTokenNotConfigured(): void {
+    $transactions = [];
+    $mock = new MockHandler([new Response(200, ['Content-Type' => 'application/pdf'], '%PDF-1.4 body')]);
+    $stack = HandlerStack::create($mock);
+    $stack->push(Middleware::history($transactions));
+    $client = new Client(['handler' => $stack]);
+    $config = $this->getConfigFactoryStub([
+      'accessguard.settings' => ['scanner_endpoint' => 'http://scanner:3000'],
+    ]);
+    (new PdfClient($client, $config))->render('<h1>x</h1>');
+    $this->assertFalse($transactions[0]['request']->hasHeader('X-Scanner-Token'));
+  }
+
+  /**
    * Tests that a 200 response that is not a PDF throws.
    *
    * A misconfigured endpoint answering 200 with HTML/JSON must hit the
