@@ -68,10 +68,10 @@ class TrendChartBuilder {
       self::W,
       self::H
     );
-    $svg .= '<title id="ag-trend-title">' . Html::escape($title) . '</title>';
-    $svg .= '<desc id="ag-trend-desc">' . Html::escape($desc) . '</desc>';
+    $svg .= '<title id="ag-trend-title">' . $title . '</title>';
+    $svg .= '<desc id="ag-trend-desc">' . $desc . '</desc>';
     $svg .= $this->axes($series, $max);
-    foreach (self::SERIES as $key => [$label, $colour, $shape]) {
+    foreach (self::SERIES as $key => [, $colour, $shape]) {
       $svg .= $this->line($series, $key, $colour, $max);
       $svg .= $this->markers($series, $key, $colour, $shape, (string) $this->label($key), $max);
     }
@@ -233,7 +233,7 @@ class TrendChartBuilder {
   private function legend(): string {
     $out = '';
     $i = 0;
-    foreach (self::SERIES as $key => [$label, $colour, $shape]) {
+    foreach (self::SERIES as $key => [, $colour, $shape]) {
       $lx = self::PLOT_LEFT + $i * 132;
       $ly = 290;
       $out .= '<g fill="' . $colour . '">';
@@ -242,7 +242,7 @@ class TrendChartBuilder {
         '<text x="%d" y="%d" font-size="12" fill="#52514e">%s</text>',
         $lx + 14,
         $ly,
-        Html::escape((string) $this->label($key))
+        (string) $this->label($key)
       );
       $out .= '</g>';
       $i++;

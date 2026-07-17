@@ -118,6 +118,7 @@ class AnalyticsController extends ControllerBase {
   public function trends(): array {
     $series = $this->trendBuilder->dailySeries();
     $rows = [];
+    // The chart plots the series oldest-first; the table stays newest-first.
     foreach (array_reverse($series) as $day) {
       $rows[] = [
         $day['date'],
@@ -131,7 +132,6 @@ class AnalyticsController extends ControllerBase {
     }
 
     $build = [];
-    // The chart plots the series oldest-first; the table stays newest-first.
     $svg = $this->trendChartBuilder->render($series);
     if ($svg !== '') {
       $build['chart'] = [
