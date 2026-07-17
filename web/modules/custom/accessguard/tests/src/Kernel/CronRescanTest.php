@@ -199,4 +199,19 @@ class CronRescanTest extends KernelTestBase {
     $this->assertSame('cron', $item->data['trigger'] ?? NULL);
   }
 
+  /**
+   * Tests that saving a node of an excluded type enqueues nothing.
+   */
+  public function testSaveDoesNotEnqueueExcludedType(): void {
+    NodeType::create(['type' => 'internal', 'name' => 'Internal'])
+      ->setThirdPartySetting('accessguard', 'rescan_mode', 'disabled')
+      ->save();
+
+    Node::create(['type' => 'internal', 'title' => 'excluded', 'status' => 1])->save();
+
+    $this->assertSame(0, \Drupal::queue('accessguard_scan_queue')->numberOfItems());
+    // No cron dedup marker either: nothing was enqueued to deduplicate.
+    $this->assertSame([], \Drupal::state()->get('accessguard.cron_enqueued', []));
+  }
+
 }

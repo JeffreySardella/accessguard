@@ -48,6 +48,10 @@ function _accessguard_enqueue_scan(NodeInterface $node) {
   if (!\Drupal::config('accessguard.settings')->get('rescan_enabled')) {
     return;
   }
+  // A type excluded by its re-scan policy gets no automatic scans at all.
+  if (\Drupal::service('accessguard.rescan_policy')->isExcluded($node->bundle())) {
+    return;
+  }
   \Drupal::queue('accessguard_scan_queue')->createItem(['nid' => (int) $node->id(), 'trigger' => 'save']);
   // Record the enqueue in cron's dedup marker too, so a cron run right after
   // a save doesn't enqueue the same (stale-looking) node a second time while
