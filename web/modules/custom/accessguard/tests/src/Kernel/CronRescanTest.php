@@ -43,10 +43,10 @@ class CronRescanTest extends KernelTestBase {
    * tests need nodes that look "never enqueued" so they exercise cron's own
    * behavior in isolation.
    */
-  private function createPublishedNodeQuietly(string $title): Node {
+  private function createPublishedNodeQuietly(string $title, string $type = 'page'): Node {
     $config = \Drupal::configFactory()->getEditable('accessguard.settings');
     $config->set('rescan_enabled', FALSE)->save();
-    $node = Node::create(['type' => 'page', 'title' => $title, 'status' => 1]);
+    $node = Node::create(['type' => $type, 'title' => $title, 'status' => 1]);
     $node->save();
     $config->set('rescan_enabled', TRUE)->save();
     return $node;
@@ -212,6 +212,51 @@ class CronRescanTest extends KernelTestBase {
     $this->assertSame(0, \Drupal::queue('accessguard_scan_queue')->numberOfItems());
     // No cron dedup marker either: nothing was enqueued to deduplicate.
     $this->assertSame([], \Drupal::state()->get('accessguard.cron_enqueued', []));
+  }
+
+  /**
+   * Tests that each type is compared against its own staleness cutoff.
+   *
+   * Both nodes were scanned two hours ago: stale for the news type's custom
+   * one-hour interval, fresh for the page type's inherited 24-hour default.
+   */
+  public function testCronUsesPerTypeIntervals(): void {
+    NodeType::create(['type' => 'news', 'name' => 'News'])
+      ->setThirdPartySetting('accessguard', 'rescan_mode', 'custom')
+      ->setThirdPartySetting('accessguard', 'rescan_interval', 3600)
+      ->save();
+    $page = $this->createPublishedNodeQuietly('page node');
+    $news = $this->createPublishedNodeQuietly('news node', 'news');
+    $twoHoursAgo = \Drupal::time()->getRequestTime() - 7200;
+    foreach ([$page, $news] as $node) {
+      \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+        'target_entity_type' => 'node',
+        'target_entity_id' => $node->id(),
+        'status' => 'complete',
+        'created' => $twoHoursAgo,
+      ])->save();
+    }
+    $queue = \Drupal::queue('accessguard_scan_queue');
+
+    accessguard_cron();
+
+    $this->assertSame(1, $queue->numberOfItems());
+    $item = $queue->claimItem();
+    $this->assertSame((int) $news->id(), $item->data['nid']);
+  }
+
+  /**
+   * Tests that an excluded type is never enqueued, however stale.
+   */
+  public function testCronSkipsExcludedType(): void {
+    NodeType::create(['type' => 'internal', 'name' => 'Internal'])
+      ->setThirdPartySetting('accessguard', 'rescan_mode', 'disabled')
+      ->save();
+    $this->createPublishedNodeQuietly('never scanned, still skipped', 'internal');
+
+    accessguard_cron();
+
+    $this->assertSame(0, \Drupal::queue('accessguard_scan_queue')->numberOfItems());
   }
 
 }

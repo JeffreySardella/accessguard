@@ -140,7 +140,7 @@ function accessguard_node_delete(NodeInterface $node) {
 /**
  * Implements hook_cron().
  *
- * Enqueues published nodes that are unscanned or whose latest scan is stale.
+ * Enqueues published nodes that are unscanned or stale per their type's policy.
  */
 function accessguard_cron() {
   $config = \Drupal::config('accessguard.settings');
@@ -150,18 +150,24 @@ function accessguard_cron() {
   if (!$config->get('rescan_enabled')) {
     return;
   }
-  $interval = (int) ($config->get('rescan_interval') ?: 86400);
   $batch = (int) ($config->get('rescan_batch') ?: 25);
-  $cutoff = \Drupal::time()->getRequestTime() - $interval;
+  $policy = \Drupal::service('accessguard.rescan_policy');
 
-  $entity_type_manager = \Drupal::entityTypeManager();
-
-  // Published node ids.
-  $nids = $entity_type_manager->getStorage('node')->getQuery()
+  // Published node ids with their bundle: each type has its own staleness
+  // cutoff, and excluded types get no cron scans at all.
+  $rows = \Drupal::entityTypeManager()->getStorage('node')->getAggregateQuery()
     ->accessCheck(FALSE)
     ->condition('status', 1)
+    ->groupBy('nid')
+    ->groupBy('type')
     ->execute();
-  if (!$nids) {
+  $bundleByNid = [];
+  foreach ($rows as $row) {
+    if (!$policy->isExcluded($row['type'])) {
+      $bundleByNid[(int) $row['nid']] = $row['type'];
+    }
+  }
+  if (!$bundleByNid) {
     return;
   }
 
@@ -174,13 +180,14 @@ function accessguard_cron() {
   // lost queue item can't shelve a node forever.
   $state = \Drupal::state();
   $pending = $state->get('accessguard.cron_enqueued', []);
-  // Drop markers for nodes that are gone or unpublished.
-  $pending = array_intersect_key($pending, array_flip($nids));
+  // Drop markers for nodes that are gone, unpublished, or excluded.
+  $pending = array_intersect_key($pending, $bundleByNid);
 
   $queue = \Drupal::queue('accessguard_scan_queue');
   $now = \Drupal::time()->getRequestTime();
   $enqueued = 0;
-  foreach ($nids as $nid) {
+  foreach ($bundleByNid as $nid => $bundle) {
+    $cutoff = $now - $policy->intervalFor($bundle);
     $last = $latest[$nid] ?? 0;
     if ($last >= $cutoff) {
       continue;
@@ -190,7 +197,7 @@ function accessguard_cron() {
       // Already enqueued since its last completed scan, within the interval.
       continue;
     }
-    $queue->createItem(['nid' => (int) $nid, 'trigger' => 'cron']);
+    $queue->createItem(['nid' => $nid, 'trigger' => 'cron']);
     $pending[$nid] = $now;
     if (++$enqueued >= $batch) {
       break;
