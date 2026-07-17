@@ -9,7 +9,7 @@
   Drupal.behaviors.accessguardTrendChart = {
     attach: function (context) {
       once('ag-trend-chart', '.ag-trend-chart', context).forEach(function (svg) {
-        var wrapper = svg.parentNode;
+        var wrapper = svg.closest('.ag-trend-wrapper') || svg.parentNode;
         var tip = document.createElement('div');
         tip.className = 'ag-trend-tooltip';
         tip.hidden = true;
@@ -18,9 +18,9 @@
         svg.querySelectorAll('.ag-trend-point').forEach(function (point) {
           point.addEventListener('mouseenter', function () {
             tip.textContent =
-              point.getAttribute('data-date') + ': ' +
-              point.getAttribute('data-series') + ' ' +
-              point.getAttribute('data-count');
+              (point.getAttribute('data-date') || '') + ': ' +
+              (point.getAttribute('data-series') || '') + ' ' +
+              (point.getAttribute('data-count') || '');
             var mark = point.getBoundingClientRect();
             var box = wrapper.getBoundingClientRect();
             tip.style.left = (mark.left - box.left + mark.width / 2) + 'px';

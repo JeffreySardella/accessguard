@@ -148,4 +148,47 @@ class AnalyticsControllerTest extends KernelTestBase {
     $this->assertStringContainsString('not applied retroactively', $rendered);
   }
 
+  /**
+   * Tests the trends tab renders the SVG chart above the table.
+   */
+  public function testTrendsTabRendersChart(): void {
+    $this->config('system.date')->set('timezone.default', 'UTC')->save();
+    $node = Node::create(['type' => 'page', 'title' => 'T', 'status' => 1]);
+    $node->save();
+    \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'status' => 'complete',
+      'created' => strtotime('2026-07-01 12:00:00 UTC'),
+      'count_critical' => 2,
+    ])->save();
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $build = AnalyticsController::create($this->container)->trends();
+
+    $this->assertArrayHasKey('chart', $build);
+    $this->assertContains('accessguard/trend_chart', $build['#attached']['library']);
+    $rendered = (string) \Drupal::service('renderer')->renderInIsolation($build);
+    $this->assertStringContainsString('<svg', $rendered);
+    // The chart precedes the table caption in the output.
+    $this->assertLessThan(
+      strpos($rendered, 'site state per scan-day'),
+      strpos($rendered, '<svg'),
+      'The SVG chart renders above the data table.'
+    );
+  }
+
+  /**
+   * Tests the trends tab omits the chart when there are no scans.
+   */
+  public function testTrendsTabHasNoChartWhenEmpty(): void {
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $build = AnalyticsController::create($this->container)->trends();
+
+    $this->assertArrayNotHasKey('chart', $build);
+    $rendered = (string) \Drupal::service('renderer')->renderInIsolation($build);
+    $this->assertStringContainsString('No scans recorded yet', $rendered);
+    $this->assertStringNotContainsString('<svg', $rendered);
+  }
+
 }

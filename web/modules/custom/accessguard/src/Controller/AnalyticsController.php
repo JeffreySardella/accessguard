@@ -3,6 +3,7 @@
 namespace Drupal\accessguard\Controller;
 
 use Drupal\accessguard\Service\TrendBuilder;
+use Drupal\accessguard\Service\TrendChartBuilder;
 use Drupal\accessguard\Service\ViolationAnalytics;
 use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -15,6 +16,7 @@ class AnalyticsController extends ControllerBase {
   public function __construct(
     protected ViolationAnalytics $analytics,
     protected TrendBuilder $trendBuilder,
+    protected TrendChartBuilder $trendChartBuilder,
   ) {}
 
   /**
@@ -24,6 +26,7 @@ class AnalyticsController extends ControllerBase {
     return new static(
       $container->get('accessguard.violation_analytics'),
       $container->get('accessguard.trend_builder'),
+      $container->get('accessguard.trend_chart_builder'),
     );
   }
 
@@ -113,8 +116,9 @@ class AnalyticsController extends ControllerBase {
    * Daily severity trend: site state as of end of each scan-day.
    */
   public function trends(): array {
+    $series = $this->trendBuilder->dailySeries();
     $rows = [];
-    foreach (array_reverse($this->trendBuilder->dailySeries()) as $day) {
+    foreach (array_reverse($series) as $day) {
       $rows[] = [
         $day['date'],
         $day['critical'],
@@ -125,35 +129,49 @@ class AnalyticsController extends ControllerBase {
         $day['total'],
       ];
     }
-    return [
-      // Historical waiver state is not reconstructable, so this series is
-      // "as scanned", not "open now" — say so instead of quietly disagreeing
-      // with the Overview's numbers.
-      'note' => [
-        '#markup' => '<p><em>' . $this->t('Counts are as recorded at scan time; waivers are not applied retroactively, so numbers can differ from the Overview.') . '</em></p>',
-      ],
-      'table' => [
-        '#type' => 'table',
-        '#caption' => $this->t('Violations over time (site state per scan-day)'),
-        '#header' => [
-          $this->t('Date'),
-          $this->t('Critical'),
-          $this->t('Serious'),
-          $this->t('Moderate'),
-          $this->t('Minor'),
-          $this->t('Needs review'),
-          $this->t('Total'),
-        ],
-        '#rows' => $rows,
-        '#empty' => $this->t('No scans recorded yet.'),
-      ],
-      '#cache' => [
-        // Any scan write moves the series; node deletions/access changes
-        // change which scans are visible.
-        'tags' => ['accessguard_scan_list', 'node_list'],
-        'contexts' => ['user.node_grants:view', 'user.permissions'],
-      ],
+
+    $build = [];
+    // The chart plots the series oldest-first; the table stays newest-first.
+    $svg = $this->trendChartBuilder->render($series);
+    if ($svg !== '') {
+      $build['chart'] = [
+        // #markup would strip the SVG tags via Xss::filter(); render the
+        // builder-produced (already-escaped) string raw instead.
+        '#type' => 'inline_template',
+        '#template' => '<div class="ag-trend-wrapper">{{ svg|raw }}</div>',
+        '#context' => ['svg' => $svg],
+      ];
+      $build['#attached']['library'][] = 'accessguard/trend_chart';
+    }
+
+    // Historical waiver state is not reconstructable, so this series is
+    // "as scanned", not "open now" — say so instead of quietly disagreeing
+    // with the Overview's numbers.
+    $build['note'] = [
+      '#markup' => '<p><em>' . $this->t('Counts are as recorded at scan time; waivers are not applied retroactively, so numbers can differ from the Overview.') . '</em></p>',
     ];
+    $build['table'] = [
+      '#type' => 'table',
+      '#caption' => $this->t('Violations over time (site state per scan-day)'),
+      '#header' => [
+        $this->t('Date'),
+        $this->t('Critical'),
+        $this->t('Serious'),
+        $this->t('Moderate'),
+        $this->t('Minor'),
+        $this->t('Needs review'),
+        $this->t('Total'),
+      ],
+      '#rows' => $rows,
+      '#empty' => $this->t('No scans recorded yet.'),
+    ];
+    // Any scan write moves the series; node deletions/access changes change
+    // which scans are visible.
+    $build['#cache'] = [
+      'tags' => ['accessguard_scan_list', 'node_list'],
+      'contexts' => ['user.node_grants:view', 'user.permissions'],
+    ];
+    return $build;
   }
 
 }
