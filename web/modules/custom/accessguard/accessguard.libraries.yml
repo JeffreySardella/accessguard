@@ -1,0 +1,10 @@
+trend_chart:
+  version: 1.x
+  css:
+    theme:
+      css/trend-chart.css: {}
+  js:
+    js/trend-chart.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
