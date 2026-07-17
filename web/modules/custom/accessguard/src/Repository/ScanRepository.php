@@ -3,6 +3,7 @@
 namespace Drupal\accessguard\Repository;
 
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Database\Statement\FetchAs;
 
 /**
  * Efficient lookups over accessguard_scan without loading every scan.
@@ -69,6 +70,28 @@ class ScanRepository {
       [':type' => 'node']
     )->fetchAllKeyed();
     return array_map('intval', $rows);
+  }
+
+  /**
+   * Every scan's metadata in one query, ordered by (created, id) ascending.
+   *
+   * @return array<int, array{nid: string, created: string, count_critical: string, count_serious: string, count_moderate: string, count_minor: string, count_needs_review: string}>
+   *   Raw rows (numeric strings, as PDO returns them); callers cast.
+   */
+  public function allScanMeta(): array {
+    $query = $this->database->select('accessguard_scan', 's');
+    $query->addField('s', 'target_entity_id', 'nid');
+    $query->fields('s', [
+      'created',
+      'count_critical',
+      'count_serious',
+      'count_moderate',
+      'count_minor',
+      'count_needs_review',
+    ]);
+    $query->orderBy('s.created');
+    $query->orderBy('s.id');
+    return $query->execute()->fetchAll(FetchAs::Associative);
   }
 
 }

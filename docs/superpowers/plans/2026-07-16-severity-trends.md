@@ -76,6 +76,9 @@ class TrendBuilderTest extends KernelTestBase {
     $this->installConfig(['system', 'field', 'filter', 'node', 'accessguard']);
     NodeType::create(['type' => 'page', 'name' => 'Page'])->save();
     $this->createUser([]);
+    // Day bucketing happens in the site timezone; pin it so the fixture
+    // timestamps land on deterministic days.
+    $this->config('system.date')->set('timezone.default', 'UTC')->save();
   }
 
   /**
@@ -206,7 +209,7 @@ Add to `web/modules/custom/accessguard/src/Repository/ScanRepository.php` (after
     ]);
     $query->orderBy('s.created');
     $query->orderBy('s.id');
-    return $query->execute()->fetchAll(\PDO::FETCH_ASSOC);
+    return $query->execute()->fetchAll(\Drupal\Core\Database\Statement\FetchAs::Associative);
   }
 ```
 

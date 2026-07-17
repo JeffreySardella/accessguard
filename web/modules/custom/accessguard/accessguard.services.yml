@@ -31,3 +31,6 @@ services:
   accessguard.gate_evaluator:
     class: Drupal\accessguard\Service\GateEvaluator
     arguments: ['@entity_type.manager', '@config.factory', '@accessguard.waiver_matcher', '@accessguard.scan_repository']
+  accessguard.trend_builder:
+    class: Drupal\accessguard\Service\TrendBuilder
+    arguments: ['@entity_type.manager', '@accessguard.scan_repository', '@current_user', '@date.formatter']
