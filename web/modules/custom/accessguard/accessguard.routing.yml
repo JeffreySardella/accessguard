@@ -87,3 +87,11 @@ accessguard.audit_export_pdf:
     _title: 'Export AccessGuard PDF'
   requirements:
     _permission: 'view accessguard reports'
+
+accessguard.analytics_trends:
+  path: '/admin/reports/accessguard/trends'
+  defaults:
+    _controller: 'Drupal\accessguard\Controller\AnalyticsController::trends'
+    _title: 'AccessGuard: trends'
+  requirements:
+    _permission: 'view accessguard reports'

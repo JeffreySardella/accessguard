@@ -122,4 +122,30 @@ class AnalyticsControllerTest extends KernelTestBase {
     $this->assertTrue($accessManager->checkNamedRoute('accessguard.analytics_authors', [], $viewer));
   }
 
+  /**
+   * Tests the trends tab renders the state series newest-first with a note.
+   */
+  public function testTrendsTabRendersSeries(): void {
+    // Day bucketing happens in the site timezone; pin it so the fixture
+    // timestamp lands on a deterministic day.
+    $this->config('system.date')->set('timezone.default', 'UTC')->save();
+    $node = Node::create(['type' => 'page', 'title' => 'T', 'status' => 1]);
+    $node->save();
+    \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'status' => 'complete',
+      'created' => strtotime('2026-07-01 12:00:00 UTC'),
+      'count_critical' => 2,
+    ])->save();
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $build = AnalyticsController::create($this->container)->trends();
+
+    $this->assertSame('2026-07-01', $build['table']['#rows'][0][0]);
+    $this->assertSame(2, $build['table']['#rows'][0][1]);
+    $rendered = (string) \Drupal::service('renderer')->renderInIsolation($build);
+    $this->assertStringContainsString('not applied retroactively', $rendered);
+  }
+
 }

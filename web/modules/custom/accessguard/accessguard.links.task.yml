@@ -15,3 +15,9 @@ accessguard.authors_tab:
   route_name: accessguard.analytics_authors
   base_route: accessguard.dashboard
   weight: 20
+
+accessguard.trends_tab:
+  title: 'Trends'
+  route_name: accessguard.analytics_trends
+  base_route: accessguard.dashboard
+  weight: 30

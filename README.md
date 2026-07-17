@@ -105,6 +105,7 @@ You should see all six demo pages, each with the accessibility violation it was 
   - **publish-gating**: an entity validation constraint that blocks publishing a node whose latest scan has violations at/above a configured severity threshold (bypassable with a permission)
   - **CSV audit export** (formula-injection-safe) at `/admin/reports/accessguard/export`, plus a formal **PDF audit report** (cover, compliance summary, per-rule / per-author breakdowns, and per-page findings with waiver justifications) rendered by the scanner
   - **per-rule and per-author analytics** as dashboard tabs (Overview / By rule / By author) — surface which rules cause the most violations site-wide and which authors' content needs attention
+  - a **Trends** tab charting the site's per-severity counts as a day-by-day state series from scan history (as-scanned numbers; waivers aren't applied retroactively)
   - **violation triage**: waive false-positives / accepted-risks (matched by rule+selector across scans); waived issues stop blocking the gate and are flagged in the audit export
   - a **settings form** at /admin/config/system/accessguard
 - **`accessguard_demo` module** — a content type plus six pages, each seeded with one reliable WCAG violation, for exercising the pipeline.
