@@ -62,21 +62,32 @@ left/bottom margin for axis labels.
   five series are distinguishable without relying on colour alone
   (WCAG 1.4.1 — non-negotiable for this tool's own UI).
 
-### 3. Colour palette
+### 3. Colour palette (validated)
 
-A fixed severity palette defined once as a class constant in the builder,
-each colour checked for contrast against the chart background and chosen to
-stay distinguishable under common colour-vision deficiencies:
+A fixed severity palette defined once as a class constant in the builder.
+Validated with the `dataviz` skill's palette validator against a light chart
+surface (the Claro admin theme; this is a light-only admin surface, so no
+dark variant is built). The ordering was chosen so adjacent severities stay
+apart under colour-vision deficiency — critical stays the conventional red,
+and no severity uses green (green reads as "good/pass" in an accessibility
+tool):
 
-- critical — deep red
-- serious — orange
-- moderate — amber
-- minor — blue
-- needs-review — grey
+| Severity | Hue | Hex |
+|----------|-----|-----|
+| critical | red | `#e34948` |
+| serious | violet | `#4a3aa7` |
+| moderate | orange | `#eb6834` |
+| minor | blue | `#2a78d6` |
+| needs-review | teal | `#1baf7a` |
 
-Exact hex values are validated during implementation with the `dataviz`
-skill (categorical palette + contrast validator). Colour is a secondary cue;
-the marker shapes in §2 are the primary differentiator.
+Validator result (light, surface `#fcfcfb`): lightness band, chroma floor,
+CVD separation, and normal-vision floor all **PASS** (worst adjacent
+normal-vision ΔE 22.7). Teal is the one colour below 3:1 contrast (2.74:1);
+the validator's **relief rule** is satisfied because the chart ships both a
+visible text legend and the full data table beneath it. Colour is a
+secondary cue regardless — the distinct marker shapes in §2 are the primary
+differentiator (each severity keeps its shape even where two colours are
+close under CVD).
 
 ### 4. Assets: `accessguard/trend_chart` library
 
