@@ -7,8 +7,10 @@
 
 use Drupal\accessguard\Service\ScanAccessToken;
 use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\node\NodeInterface;
+use Drupal\node\NodeTypeInterface;
 
 /**
  * Implements hook_entity_type_alter().
@@ -204,6 +206,71 @@ function accessguard_cron() {
     }
   }
   $state->set('accessguard.cron_enqueued', $pending);
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter() for the node type form.
+ *
+ * Adds the per-type re-scan policy to the content type's add/edit form:
+ * inherit the global cadence, set a type-specific interval, or exclude the
+ * type from AccessGuard (no automatic scans, exempt from the publish gate).
+ */
+function accessguard_form_node_type_form_alter(array &$form, FormStateInterface $form_state): void {
+  /** @var \Drupal\node\NodeTypeInterface $type */
+  $type = $form_state->getFormObject()->getEntity();
+  $form['accessguard'] = [
+    '#type' => 'details',
+    '#title' => t('AccessGuard'),
+    '#group' => 'additional_settings',
+    '#tree' => TRUE,
+  ];
+  $form['accessguard']['rescan_mode'] = [
+    '#type' => 'select',
+    '#title' => t('Re-scan policy'),
+    '#options' => [
+      'inherit' => t('Site default'),
+      'custom' => t('Custom interval'),
+      'disabled' => t('Disabled — never scan or gate this content type'),
+    ],
+    '#default_value' => $type->getThirdPartySetting('accessguard', 'rescan_mode', 'inherit'),
+    '#description' => t('Disabled means AccessGuard ignores this type entirely: no automatic scans, and the publish gate does not apply. Existing scan data remains visible as history.'),
+  ];
+  $form['accessguard']['rescan_interval'] = [
+    '#type' => 'number',
+    '#title' => t('Re-scan interval (seconds)'),
+    '#min' => 60,
+    '#default_value' => $type->getThirdPartySetting('accessguard', 'rescan_interval', 86400),
+    '#states' => [
+      'visible' => [':input[name="accessguard[rescan_mode]"]' => ['value' => 'custom']],
+      'required' => [':input[name="accessguard[rescan_mode]"]' => ['value' => 'custom']],
+    ],
+  ];
+  $form['#entity_builders'][] = 'accessguard_form_node_type_form_builder';
+}
+
+/**
+ * Entity builder: maps the form's policy values to third-party settings.
+ *
+ * Inherit stores nothing at all, so an exported node type only carries
+ * AccessGuard keys when its policy actually deviates from the site default.
+ */
+function accessguard_form_node_type_form_builder(string $entity_type, NodeTypeInterface $type, array &$form, FormStateInterface $form_state): void {
+  $values = $form_state->getValue('accessguard') ?? [];
+  $mode = $values['rescan_mode'] ?? 'inherit';
+  if ($mode === 'inherit') {
+    $type->unsetThirdPartySetting('accessguard', 'rescan_mode');
+    $type->unsetThirdPartySetting('accessguard', 'rescan_interval');
+    return;
+  }
+  $type->setThirdPartySetting('accessguard', 'rescan_mode', $mode);
+  if ($mode === 'custom') {
+    // #states-required is client-side only; clamp so a bypassed browser
+    // can't store a tight-loop interval.
+    $type->setThirdPartySetting('accessguard', 'rescan_interval', max(60, (int) ($values['rescan_interval'] ?? 0)));
+  }
+  else {
+    $type->unsetThirdPartySetting('accessguard', 'rescan_interval');
+  }
 }
 
 /**
