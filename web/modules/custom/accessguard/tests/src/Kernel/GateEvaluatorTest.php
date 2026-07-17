@@ -139,4 +139,15 @@ class GateEvaluatorTest extends KernelTestBase {
     $this->assertSame(0, \Drupal::service('accessguard.gate_evaluator')->blockingCount($nid));
   }
 
+  /**
+   * Tests an excluded content type yields NULL regardless of scan data.
+   */
+  public function testExcludedTypeYieldsNull(): void {
+    NodeType::load('page')->setThirdPartySetting('accessguard', 'rescan_mode', 'disabled')->save();
+    $nid = $this->makeNode();
+    $this->makeScan($nid, [['critical', 'img']]);
+
+    $this->assertNull(\Drupal::service('accessguard.gate_evaluator')->blockingCount($nid));
+  }
+
 }

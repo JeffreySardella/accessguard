@@ -289,4 +289,20 @@ class PublishGateTest extends KernelTestBase {
     $this->assertSame(0, $this->countGateViolations($node));
   }
 
+  /**
+   * Tests a node of an excluded type publishes despite a failing scan.
+   *
+   * Excluded means AccessGuard ignores the type; without the exemption a
+   * type excluded after a failing scan could never be published again
+   * (re-scans are off, so the stale scan would gate forever).
+   */
+  public function testExcludedTypeBypassesGate(): void {
+    NodeType::load('page')->setThirdPartySetting('accessguard', 'rescan_mode', 'disabled')->save();
+    $node = Node::create(['type' => 'page', 'title' => 'excluded', 'status' => 0]);
+    $node->save();
+    $this->makeScan((int) $node->id(), 1);
+    $node->setPublished();
+    $this->assertSame(0, $this->countGateViolations($node));
+  }
+
 }

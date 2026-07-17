@@ -22,18 +22,28 @@ class GateEvaluator {
     protected ConfigFactoryInterface $configFactory,
     protected WaiverMatcher $waiverMatcher,
     protected ScanRepository $scanRepository,
+    protected RescanPolicy $rescanPolicy,
   ) {}
 
   /**
    * Counts the blocking violations in a node's latest scan.
    *
    * @return int|null
-   *   NULL when the node has never been scanned (nothing to gate on);
+   *   NULL when the node has never been scanned or its content type is
+   *   excluded by its re-scan policy (nothing to gate on);
    *   otherwise the number of violations at or above the configured
    *   gate_threshold rank that are not waived (and not needs-review,
    *   unless gate_includes_needs_review is set).
    */
   public function blockingCount(int $nid): ?int {
+    // An excluded type is exempt from the gate entirely — otherwise a type
+    // excluded after a failing scan could never be published again
+    // (automatic re-scans are off, so the stale scan would gate forever).
+    $node = $this->entityTypeManager->getStorage('node')->load($nid);
+    if ($node && $this->rescanPolicy->isExcluded($node->bundle())) {
+      return NULL;
+    }
+
     $scanId = $this->scanRepository->latestScanIdForNode($nid);
     if (!$scanId) {
       return NULL;

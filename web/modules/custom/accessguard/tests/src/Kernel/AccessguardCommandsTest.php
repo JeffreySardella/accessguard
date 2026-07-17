@@ -192,4 +192,32 @@ class AccessguardCommandsTest extends KernelTestBase {
     $this->createCommand()->gate(999);
   }
 
+  /**
+   * Tests the gate command exempts nodes of excluded content types.
+   */
+  public function testGateSkipsExcludedType(): void {
+    NodeType::create(['type' => 'internal', 'name' => 'Internal'])
+      ->setThirdPartySetting('accessguard', 'rescan_mode', 'disabled')
+      ->save();
+    $node = Node::create(['type' => 'internal', 'title' => 'excluded dirty', 'status' => 1]);
+    $node->save();
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'status' => 'complete',
+    ]);
+    $scan->save();
+    \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+      'scan_id' => $scan->id(),
+      'rule_id' => 'image-alt',
+      'impact' => 'critical',
+      'selector' => 'img',
+    ])->save();
+
+    $result = $this->createCommand()->gate();
+
+    $this->assertSame(0, $result->getExitCode());
+    $this->assertCount(0, $result->getOutputData()->getArrayCopy());
+  }
+
 }

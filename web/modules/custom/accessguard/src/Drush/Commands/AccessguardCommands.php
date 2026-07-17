@@ -116,9 +116,9 @@ final class AccessguardCommands extends DrushCommands implements ContainerInject
     foreach ($nids as $id) {
       $blocking = $this->gateEvaluator->blockingCount($id);
       if ($blocking === NULL) {
-        // Never scanned: nothing to gate on (single-nid path only; the
-        // all-nodes list is built from scans, so it can't get here).
-        $this->io()->note("Node $id has never been scanned; nothing to gate on.");
+        // Nothing to gate on: never scanned, or the node's content type is
+        // excluded by its re-scan policy.
+        $this->io()->note("Node $id has nothing to gate on (never scanned, or its content type is excluded).");
         continue;
       }
       if ($blocking > 0) {
