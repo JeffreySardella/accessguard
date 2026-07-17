@@ -100,7 +100,7 @@ You should see all six demo pages, each with the accessibility violation it was 
   - `ScanRunner` (calls the scanner), `ScanRecorder` (persists results), and `RegressionService` (diffs a node's two latest scans) services
   - a queue worker and a `drush accessguard:scan` command
   - a **CI gate**: `drush accessguard:gate` evaluates the publish-gate policy (threshold, waivers, needs-review setting) against every published node that has a scan and exits non-zero if anything blocks — wire it into CI to fail a build on accessibility regressions. Pass a node id to check one node; use `--format=json` for machine-readable output. Runs even when the interactive gate is disabled.
-  - **cron site-wide re-scanning** of stale/unscanned published nodes
+  - **cron site-wide re-scanning** of stale/unscanned published nodes, with **per-content-type policies**: each type can inherit the global interval, set its own, or opt out of scanning and gating entirely (configured on the content type's edit form)
   - a **compliance dashboard** at `/admin/reports/accessguard`, plus per-node detail pages with scan history, regression diff (new / fixed / persisting), and author attribution
   - **publish-gating**: an entity validation constraint that blocks publishing a node whose latest scan has violations at/above a configured severity threshold (bypassable with a permission)
   - **CSV audit export** (formula-injection-safe) at `/admin/reports/accessguard/export`, plus a formal **PDF audit report** (cover, compliance summary, per-rule / per-author breakdowns, and per-page findings with waiver justifications) rendered by the scanner

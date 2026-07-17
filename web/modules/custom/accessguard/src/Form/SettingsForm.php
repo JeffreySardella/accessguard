@@ -92,6 +92,7 @@ class SettingsForm extends ConfigFormBase {
     $form['rescan_interval'] = [
       '#type' => 'number',
       '#title' => $this->t('Re-scan interval (seconds)'),
+      '#description' => $this->t('The default staleness window for cron re-scans. Content types can override it — or opt out of scanning and gating entirely — in the AccessGuard section of their edit forms.'),
       '#default_value' => $config->get('rescan_interval') ?: 86400,
       '#min' => 60,
     ];
