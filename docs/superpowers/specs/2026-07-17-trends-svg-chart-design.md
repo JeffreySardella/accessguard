@@ -92,19 +92,27 @@ close under CVD).
 ### 4. Assets: `accessguard/trend_chart` library
 
 The module's first `accessguard.libraries.yml` defines a `trend_chart`
-library with one CSS file (chart sizing, legend layout, tooltip box styling,
-`:focus-visible` outline on points) and one JS file. The controller attaches
-it via `#attached[library][]` on the trends render array.
+library with one CSS file (chart sizing, legend layout, tooltip box styling)
+and one JS file. The controller attaches it via `#attached[library][]` on
+the trends render array.
 
 ### 5. JS tooltip behaviour (progressive enhancement)
 
 `js/trend-chart.js` — a vanilla-JS `Drupal.behaviors` entry, no third-party
-library. Each data point is focusable (`tabindex="0"`) and carries a native
-`<title>` ("<date>: <severity> <count>"). The behaviour adds a styled
-tooltip box shown on **both** `mouseenter`/`mouseleave` and
-`focus`/`blur`, so mouse and keyboard users get the same richer tooltip.
-With JS disabled, the native `<title>` tooltips and the full table still
-convey everything — the chart degrades, it never breaks.
+library. It is a **pointer-hover enhancement only**: on `mouseenter`/
+`mouseleave` of a data-point marker it shows/hides a styled tooltip box
+reading "<date>: <severity> <count>", positioned near the marker. Marker
+coordinates and text come from `data-*` attributes the builder writes on
+each marker.
+
+Accessibility is handled by the SVG's own `role="img"` + `<title>`/`<desc>`
+summary and by the full data table beneath the chart — **not** by making
+individual points focusable. Focusable children inside a `role="img"`
+element contradict its single-image semantics, so the chart deliberately
+has none; keyboard and assistive-tech users read the summary and the table,
+which carry every number the hover tooltip would. Each marker still carries
+a native SVG `<title>` child, so even with JS disabled a mouse hover shows
+the browser's built-in tooltip. The chart degrades, it never breaks.
 
 ### 6. Controller wiring
 
