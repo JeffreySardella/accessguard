@@ -220,4 +220,27 @@ class AccessguardCommandsTest extends KernelTestBase {
     $this->assertCount(0, $result->getOutputData()->getArrayCopy());
   }
 
+  /**
+   * Tests that a manual scan still enqueues a node of an excluded type.
+   *
+   * Exclusion suppresses automatic (save/cron) scans, but an explicit
+   * drush accessguard:scan is an operator's deliberate request — the spec
+   * keeps it working regardless of policy. A test locks that decision in so
+   * a future "skip excluded types" change to the command can't pass silently.
+   */
+  public function testManualScanEnqueuesExcludedType(): void {
+    NodeType::create(['type' => 'internal', 'name' => 'Internal'])
+      ->setThirdPartySetting('accessguard', 'rescan_mode', 'disabled')
+      ->save();
+    $node = Node::create(['type' => 'internal', 'title' => 'excluded', 'status' => 1]);
+    $node->save();
+
+    $this->createCommand()->scan((int) $node->id());
+
+    $item = \Drupal::queue('accessguard_scan_queue')->claimItem();
+    $this->assertNotFalse($item);
+    $this->assertSame((int) $node->id(), $item->data['nid']);
+    $this->assertSame('manual', $item->data['trigger']);
+  }
+
 }

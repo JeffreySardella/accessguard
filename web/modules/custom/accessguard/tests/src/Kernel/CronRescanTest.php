@@ -259,4 +259,35 @@ class CronRescanTest extends KernelTestBase {
     $this->assertSame(0, \Drupal::queue('accessguard_scan_queue')->numberOfItems());
   }
 
+  /**
+   * Tests that dedup holds for a custom-interval type within its own window.
+   *
+   * The marker-freshness check now uses the per-node cutoff, so a stale
+   * custom-interval node enqueued once must not be re-enqueued by a second
+   * cron run while its scan is still pending — the same guarantee the
+   * inherited-interval path has.
+   */
+  public function testCronDedupsCustomIntervalType(): void {
+    NodeType::create(['type' => 'news', 'name' => 'News'])
+      ->setThirdPartySetting('accessguard', 'rescan_mode', 'custom')
+      ->setThirdPartySetting('accessguard', 'rescan_interval', 3600)
+      ->save();
+    $news = $this->createPublishedNodeQuietly('stale news', 'news');
+    // A scan two hours ago is stale for the custom one-hour interval.
+    \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $news->id(),
+      'status' => 'complete',
+      'created' => \Drupal::time()->getRequestTime() - 7200,
+    ])->save();
+    $queue = \Drupal::queue('accessguard_scan_queue');
+
+    accessguard_cron();
+    $this->assertSame(1, $queue->numberOfItems());
+
+    // Second run before the queued scan completes must not pile up a duplicate.
+    accessguard_cron();
+    $this->assertSame(1, $queue->numberOfItems());
+  }
+
 }
