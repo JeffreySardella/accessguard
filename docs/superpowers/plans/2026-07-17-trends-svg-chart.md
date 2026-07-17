@@ -518,8 +518,11 @@ class TrendChartLibraryTest extends KernelTestBase {
 
     $css = array_column($library['css'], 'data');
     $js = array_column($library['js'], 'data');
-    $this->assertContains('css/trend-chart.css', $css);
-    $this->assertContains('js/trend-chart.js', $js);
+    // Drupal's LibraryDiscoveryParser rewrites asset paths to be
+    // module-relative (modules/custom/accessguard/...), so match the suffix
+    // rather than the bare path.
+    $this->assertNotEmpty(array_filter($css, fn ($p) => str_ends_with($p, 'css/trend-chart.css')));
+    $this->assertNotEmpty(array_filter($js, fn ($p) => str_ends_with($p, 'js/trend-chart.js')));
   }
 
 }
