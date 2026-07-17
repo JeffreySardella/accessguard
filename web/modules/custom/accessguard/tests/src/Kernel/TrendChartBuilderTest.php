@@ -95,7 +95,10 @@ class TrendChartBuilderTest extends KernelTestBase {
   public function testLegendListsAllSeverities(): void {
     $svg = $this->builder()->render([$this->row('2026-07-01', 1)]);
     foreach (['Critical', 'Serious', 'Moderate', 'Minor', 'Needs review'] as $label) {
-      $this->assertStringContainsString($label, $svg);
+      // Legend entries render as <text ... fill="#52514e">LABEL</text>;
+      // marker tooltips use <title>, not this text element, so this only
+      // passes if legend() actually emits the label.
+      $this->assertStringContainsString('>' . $label . '</text>', $svg);
     }
   }
 
@@ -126,6 +129,17 @@ class TrendChartBuilderTest extends KernelTestBase {
     $svg = $this->builder()->render([$this->row('2026-07-01', 3)]);
     $this->assertStringContainsString('<svg', $svg);
     $this->assertSame(5, substr_count($svg, 'class="ag-trend-point"'));
+  }
+
+  /**
+   * Tests an all-zero series still renders on a positive axis.
+   */
+  public function testAllZeroSeriesRenders(): void {
+    $svg = $this->builder()->render([$this->row('2026-07-01'), $this->row('2026-07-02')]);
+    $this->assertStringContainsString('<svg', $svg);
+    // niceMax falls back to 1, so the axis carries a '1' label.
+    $this->assertStringContainsString('>1</text>', $svg);
+    $this->assertSame(10, substr_count($svg, 'class="ag-trend-point"'));
   }
 
 }

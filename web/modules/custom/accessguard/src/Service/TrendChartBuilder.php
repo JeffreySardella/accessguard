@@ -4,6 +4,7 @@ namespace Drupal\accessguard\Service;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\StringTranslation\TranslationInterface;
 
 /**
@@ -72,8 +73,7 @@ class TrendChartBuilder {
     $svg .= $this->axes($series, $max);
     foreach (self::SERIES as $key => [$label, $colour, $shape]) {
       $svg .= $this->line($series, $key, $colour, $max);
-      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
-      $svg .= $this->markers($series, $key, $colour, $shape, (string) $this->t($label), $max);
+      $svg .= $this->markers($series, $key, $colour, $shape, (string) $this->label($key), $max);
     }
     $svg .= $this->legend();
     $svg .= '</svg>';
@@ -233,7 +233,7 @@ class TrendChartBuilder {
   private function legend(): string {
     $out = '';
     $i = 0;
-    foreach (self::SERIES as [$label, $colour, $shape]) {
+    foreach (self::SERIES as $key => [$label, $colour, $shape]) {
       $lx = self::PLOT_LEFT + $i * 132;
       $ly = 290;
       $out .= '<g fill="' . $colour . '">';
@@ -242,13 +242,28 @@ class TrendChartBuilder {
         '<text x="%d" y="%d" font-size="12" fill="#52514e">%s</text>',
         $lx + 14,
         $ly,
-        // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
-        Html::escape((string) $this->t($label))
+        Html::escape((string) $this->label($key))
       );
       $out .= '</g>';
       $i++;
     }
     return $out;
+  }
+
+  /**
+   * The translated label for a severity key.
+   *
+   * Literal t() calls per key (not $this->t($variable)) so Drupal's string
+   * extraction can find every label for translation.
+   */
+  private function label(string $key): TranslatableMarkup {
+    return match ($key) {
+      'critical' => $this->t('Critical'),
+      'serious' => $this->t('Serious'),
+      'moderate' => $this->t('Moderate'),
+      'minor' => $this->t('Minor'),
+      'needs_review' => $this->t('Needs review'),
+    };
   }
 
 }
