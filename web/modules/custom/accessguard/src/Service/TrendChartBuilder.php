@@ -68,8 +68,10 @@ class TrendChartBuilder {
       self::W,
       self::H
     );
-    $svg .= '<title id="ag-trend-title">' . $title . '</title>';
-    $svg .= '<desc id="ag-trend-desc">' . $desc . '</desc>';
+    // Escape every non-literal value: the whole SVG is emitted via
+    // {{ svg|raw }}, so this string is the only escaping boundary.
+    $svg .= '<title id="ag-trend-title">' . Html::escape($title) . '</title>';
+    $svg .= '<desc id="ag-trend-desc">' . Html::escape($desc) . '</desc>';
     $svg .= $this->axes($series, $max);
     foreach (self::SERIES as $key => [, $colour, $shape]) {
       $svg .= $this->line($series, $key, $colour, $max);
@@ -242,7 +244,7 @@ class TrendChartBuilder {
         '<text x="%d" y="%d" font-size="12" fill="#52514e">%s</text>',
         $lx + 14,
         $ly,
-        (string) $this->label($key)
+        Html::escape((string) $this->label($key))
       );
       $out .= '</g>';
       $i++;
