@@ -32,3 +32,14 @@ accessguard.settings:
     retention_days:
       type: integer
       label: 'Days to keep old scans (0 = forever; the latest scan per node is always kept)'
+
+node.type.*.third_party.accessguard:
+  type: mapping
+  label: 'AccessGuard re-scan policy'
+  mapping:
+    rescan_mode:
+      type: string
+      label: 'Re-scan mode (inherit | custom | disabled)'
+    rescan_interval:
+      type: integer
+      label: 'Type-specific re-scan interval in seconds (custom mode only)'
