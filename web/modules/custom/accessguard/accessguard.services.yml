@@ -34,6 +34,9 @@ services:
   accessguard.trend_builder:
     class: Drupal\accessguard\Service\TrendBuilder
     arguments: ['@entity_type.manager', '@accessguard.scan_repository', '@current_user', '@date.formatter']
+  accessguard.trend_chart_builder:
+    class: Drupal\accessguard\Service\TrendChartBuilder
+    arguments: ['@string_translation']
   accessguard.rescan_policy:
     class: Drupal\accessguard\Service\RescanPolicy
     arguments: ['@entity_type.manager', '@config.factory']
