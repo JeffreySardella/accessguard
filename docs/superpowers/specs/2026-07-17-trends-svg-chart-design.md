@@ -66,8 +66,12 @@ left/bottom margin for axis labels.
 
 A fixed severity palette defined once as a class constant in the builder.
 Validated with the `dataviz` skill's palette validator against a light chart
-surface (the Claro admin theme; this is a light-only admin surface, so no
-dark variant is built). The ordering was chosen so adjacent severities stay
+surface. The five severity line/marker colours are fixed (semantic), but the
+chart *chrome* — gridlines, axis labels, and legend text — is rendered with
+`currentColor` (low opacity for the recessive grid) so it inherits the admin
+theme's foreground and stays legible on a light theme (Claro) or a dark one
+(Gin, which this site actually runs) without a separate dark palette. The
+ordering was chosen so adjacent severities stay
 apart under colour-vision deficiency — critical stays the conventional red,
 and no severity uses green (green reads as "good/pass" in an accessibility
 tool):

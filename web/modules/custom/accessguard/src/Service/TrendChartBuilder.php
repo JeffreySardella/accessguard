@@ -145,14 +145,17 @@ class TrendChartBuilder {
       $value = (int) ($max * $k / $steps);
       $yy = $this->y($value, $max);
       $out .= sprintf(
-        '<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="#e1e0d9" stroke-width="1"/>',
+        // currentColor so the chrome inherits the admin theme's foreground
+        // (legible on light Claro and dark Gin alike); severity line colours
+        // stay fixed. Low opacity keeps the grid recessive on either theme.
+        '<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" stroke-opacity="0.2" stroke-width="1"/>',
         self::PLOT_LEFT,
         $yy,
         self::PLOT_RIGHT,
         $yy
       );
       $out .= sprintf(
-        '<text x="%d" y="%.1f" text-anchor="end" font-size="11" fill="#898781">%d</text>',
+        '<text x="%d" y="%.1f" text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.7">%d</text>',
         self::PLOT_LEFT - 6,
         $yy + 3,
         $value
@@ -166,7 +169,7 @@ class TrendChartBuilder {
         continue;
       }
       $out .= sprintf(
-        '<text x="%.1f" y="%d" text-anchor="middle" font-size="11" fill="#898781">%s</text>',
+        '<text x="%.1f" y="%d" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity="0.7">%s</text>',
         $this->x($i, $n),
         self::PLOT_BOTTOM + 16,
         Html::escape(substr((string) $row['date'], 5))
@@ -240,8 +243,10 @@ class TrendChartBuilder {
       $ly = 290;
       $out .= '<g fill="' . $colour . '">';
       $out .= $this->glyph($shape, $lx + 4, $ly - 4);
+      // Glyph keeps the severity colour (group fill); the label takes the
+      // theme foreground via currentColor so it stays legible on any theme.
       $out .= sprintf(
-        '<text x="%d" y="%d" font-size="12" fill="#52514e">%s</text>',
+        '<text x="%d" y="%d" font-size="12" fill="currentColor">%s</text>',
         $lx + 14,
         $ly,
         Html::escape((string) $this->label($key))
