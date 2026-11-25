@@ -182,4 +182,42 @@ class ReportHtmlBuilderTest extends KernelTestBase {
     $this->assertStringContainsString('&lt;b&gt;x&lt;/b&gt;', $html);
   }
 
+  /**
+   * Tests site name, selector, impact and waiver reason are escaped too.
+   */
+  public function testOtherUserControlledFieldsAreEscaped(): void {
+    \Drupal::configFactory()->getEditable('system.site')->set('name', '<em>site-x</em>')->save();
+    $node = Node::create(['type' => 'page', 'title' => 'Homepage', 'status' => 1]);
+    $node->save();
+    $scan = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->create([
+      'target_entity_type' => 'node',
+      'target_entity_id' => $node->id(),
+      'status' => 'complete',
+    ]);
+    $scan->save();
+    $violationStorage = \Drupal::entityTypeManager()->getStorage('accessguard_violation');
+    $violationStorage->create([
+      'scan_id' => $scan->id(),
+      'rule_id' => 'image-alt',
+      'impact' => 'critical',
+      'selector' => '<u>sel-waived</u>',
+    ])->save();
+    $violationStorage->create([
+      'scan_id' => $scan->id(),
+      'rule_id' => 'label',
+      'impact' => '<i>impact-x</i>',
+      'selector' => 'input',
+    ])->save();
+    \Drupal::service('accessguard.waiver_matcher')
+      ->createWaiver((int) $node->id(), 'image-alt', '<u>sel-waived</u>', 'false_positive', '<s>reason-x</s>', 1);
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $html = \Drupal::service('accessguard.report_html_builder')->build();
+
+    foreach (['<em>site-x</em>', '<u>sel-waived</u>', '<i>impact-x</i>', '<s>reason-x</s>'] as $raw) {
+      $this->assertStringNotContainsString($raw, $html);
+      $this->assertStringContainsString(htmlspecialchars($raw, ENT_QUOTES), $html);
+    }
+  }
+
 }

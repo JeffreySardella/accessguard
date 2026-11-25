@@ -2,7 +2,9 @@
 
 namespace Drupal\Tests\accessguard\Kernel;
 
+use Drupal\accessguard\Form\UnwaiveForm;
 use Drupal\accessguard\Form\WaiveForm;
+use Drupal\accessguard\Service\WaiverMatcher;
 use Drupal\Core\Form\FormState;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
@@ -11,7 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests that WaiveForm only accepts real, un-waived current violations.
+ * Tests WaiveForm validation and the UnwaiveForm submit path.
  *
  * @group accessguard
  */
@@ -115,6 +117,31 @@ class WaiveFormValidationTest extends KernelTestBase {
     $this->assertNotSame([], $form_state->getErrors());
     $waivers = \Drupal::entityTypeManager()->getStorage('accessguard_waiver')->loadMultiple();
     $this->assertCount(1, $waivers);
+  }
+
+  /**
+   * Tests that submitting the unwaive form removes only the targeted waiver.
+   */
+  public function testUnwaiveFormSubmitRemovesWaiver(): void {
+    $matcher = \Drupal::service('accessguard.waiver_matcher');
+    $nid = (int) $this->node->id();
+    $matcher->createWaiver($nid, 'image-alt', 'img', 'false_positive', 'decorative', 1);
+    $matcher->createWaiver($nid, 'label', 'input', 'accepted_risk', 'legacy form', 1);
+
+    $request = Request::create('/unwaive', 'GET', ['rule' => 'image-alt', 'selector' => 'img']);
+    \Drupal::requestStack()->push($request);
+    try {
+      $form_state = new FormState();
+      \Drupal::formBuilder()->submitForm(UnwaiveForm::class, $form_state, $this->node);
+    }
+    finally {
+      \Drupal::requestStack()->pop();
+    }
+
+    $this->assertSame([], $form_state->getErrors());
+    $map = $matcher->waivedFingerprints($nid);
+    $this->assertArrayNotHasKey(WaiverMatcher::fingerprint('image-alt', 'img'), $map);
+    $this->assertArrayHasKey(WaiverMatcher::fingerprint('label', 'input'), $map);
   }
 
 }
