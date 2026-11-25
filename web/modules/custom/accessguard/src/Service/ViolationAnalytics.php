@@ -37,6 +37,13 @@ class ViolationAnalytics {
   /**
    * Latest-scan violations grouped by rule.
    *
+   * Two semantics are intentional:
+   * - impact and wcag come from the first violation seen for the rule. axe
+   *   maps each rule to a single impact, so this is exact in practice.
+   * - pages counts every page where the rule fired, waived or not. A rule
+   *   fully waived on 10 pages and open on 1 reports pages 11, open 1;
+   *   open and waived count instances, so they need not sum to pages.
+   *
    * @return array<int, array{rule_id:string, impact:string, wcag:string, pages:int, open:int, waived:int}>
    *   Sorted by open count descending.
    */

@@ -67,4 +67,34 @@ class RegressionServiceTest extends KernelTestBase {
     $this->assertSame(['link-name'], $diff['persisting']);
   }
 
+  /**
+   * Tests diff() for a node that has never been scanned.
+   */
+  public function testDiffWithNoScans(): void {
+    $diff = \Drupal::service('accessguard.regression')->diff(7);
+
+    $this->assertSame([], $diff['new']);
+    $this->assertSame([], $diff['fixed']);
+    $this->assertSame([], $diff['persisting']);
+    $this->assertNull($diff['latest_scan']);
+    $this->assertNull($diff['previous_scan']);
+  }
+
+  /**
+   * Tests diff() on the first scan: every rule is new, nothing is fixed.
+   */
+  public function testDiffFirstScanReportsAllRulesAsNew(): void {
+    $this->scanWithRules(8, ['image-alt', 'link-name']);
+
+    $diff = \Drupal::service('accessguard.regression')->diff(8);
+
+    $new = $diff['new'];
+    sort($new);
+    $this->assertSame(['image-alt', 'link-name'], $new);
+    $this->assertSame([], $diff['fixed']);
+    $this->assertSame([], $diff['persisting']);
+    $this->assertNotNull($diff['latest_scan']);
+    $this->assertNull($diff['previous_scan']);
+  }
+
 }

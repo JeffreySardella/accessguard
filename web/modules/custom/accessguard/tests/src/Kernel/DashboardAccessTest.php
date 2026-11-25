@@ -149,6 +149,40 @@ class DashboardAccessTest extends KernelTestBase {
   }
 
   /**
+   * Tests the CSV Status column flags waived violations by disposition.
+   */
+  public function testCsvStatusColumnFlagsWaivedViolations(): void {
+    $node = Node::create(['type' => 'page', 'title' => 'open page', 'status' => 1]);
+    $node->save();
+    $nid = (int) $node->id();
+    $this->makeScanWithViolation($nid);
+    $scanIds = \Drupal::entityTypeManager()->getStorage('accessguard_scan')->getQuery()
+      ->accessCheck(FALSE)
+      ->execute();
+    \Drupal::entityTypeManager()->getStorage('accessguard_violation')->create([
+      'scan_id' => reset($scanIds),
+      'rule_id' => 'label',
+      'impact' => 'serious',
+      'selector' => 'input',
+    ])->save();
+    \Drupal::service('accessguard.waiver_matcher')
+      ->createWaiver($nid, 'image-alt', 'img', 'false_positive', 'decorative', 1);
+
+    $this->setCurrentUser($this->createUser(['view accessguard reports', 'access content']));
+    $csv = DashboardController::create($this->container)->exportCsv()->getContent();
+
+    $statusByRule = [];
+    foreach (array_slice(array_filter(explode("\n", $csv)), 1) as $line) {
+      $cells = str_getcsv($line, escape: '');
+      // Columns: Page, Node ID, URL, Scan date, Rule, Impact, WCAG, Selector,
+      // Status.
+      $statusByRule[$cells[4]] = $cells[8];
+    }
+    $this->assertSame('false_positive', $statusByRule['image-alt'] ?? NULL);
+    $this->assertSame('open', $statusByRule['label'] ?? NULL);
+  }
+
+  /**
    * Tests the Waive link only renders for users with the triage permission.
    */
   public function testWaiveLinkHiddenWithoutTriagePermission(): void {
